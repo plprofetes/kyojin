@@ -1,7 +1,10 @@
 # Exact pins for the Windows venv (.venv-win), applied by `kyojin_win.py setup` as a uv constraints file to both install steps.
 # Source: `uv pip freeze` of the venv that built and imported the extension (check 20261030-233000-check, 2026-10-30),
 # except three packages the freeze had as pre-releases, replaced by the stable versions in uv.lock (Linux-tested):
-#   pydantic 2.14.0b1 -> 2.14.0, pydantic-core 2.48.0 -> 2.50.0 (the pair uv.lock uses), safetensors 0.9.0rc1 -> 0.8.0.
+#   pydantic 2.14.0b1 -> 2.14.0, pydantic-core 2.48.0 -> 2.50.0 (the pair uv.lock uses), safetensors 0.9.0rc1 -> 0.8.0,
+#   and typing-extensions 4.15.0 -> 4.16.0 (stable pydantic 2.14.0 requires >=4.16.0).
+# After EVERY edit prove the set is consistent (the unit test only checks format):
+#   uv pip compile --no-config --python-platform windows --python-version 3.12 --index-url https://pypi.org/simple -c scripts/windows/constraints-win.txt <requirements.txt without torch + triton-windows==3.9.0.post30>
 # Not listed (pinned by constants in kyojin_win.py): torch, rocm*, amd-torch-device-*, triton-windows.
 # Constraints never add packages; they only fix the version of whatever gets installed. Update this file whenever a pin moves
 # (assessment.md section 7d) and keep it free of pre-releases unless a comment says why.
@@ -47,7 +50,7 @@ sympy==1.14.0
 tokenizers==0.23.3
 tqdm==4.70.1
 truststore==0.10.5
-typing-extensions==4.15.0
+typing-extensions==4.16.0
 typing-inspection==0.4.4
 wheel==0.48.0
 yarl==1.25.1

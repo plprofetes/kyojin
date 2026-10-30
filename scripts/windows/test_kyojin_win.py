@@ -164,6 +164,7 @@ class HelpfulErrors(unittest.TestCase):
         "hip-oom": "torch.OutOfMemoryError: HIP out of memory. Tried to allocate 16.00 GiB",
         "file-locked": "PermissionError: [WinError 32] The process cannot access the file because it is being used by another process",
         "no-ninja-fallback": "clang: error: no such file or directory: '/EHsc'",
+        "cpu-target-feature": "error: always_inline function '_mm256_set1_ps' requires target feature 'avx', but would be inlined into function 'prepare_block_avx2'",
         "flag-leak": "clang: error: unknown argument: '-Xcompiler=/Zc:preprocessor'",
         "python-h": "fatal error: 'Python.h' file not found",
         "ext-not-built": "ImportError: exllamav3_ext is not built. On Windows with ROCm torch the JIT build is not supported",

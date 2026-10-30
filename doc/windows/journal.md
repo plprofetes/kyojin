@@ -130,3 +130,8 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - `serve` died in 2 s at `tools/startup_health.py:269`: `AttributeError: module 'os' has no attribute 'register_at_fork'` **[V]**, as predicted by the catalogue. Applied the saved patch (`hasattr` guard; `allow_reuse_address = os.name != "nt"` because SO_REUSEADDR on Windows lets a second process bind the same port). Linux: both conditions evaluate as before **[I]**, not run.
 - Also: `serve` now sets `PYTHONUTF8=1` for the child (cp1250 locale vs `read_text()` without encoding) instead of applying the UTF-8 patch to `tools/qwen/serve.py`.
 - **Next:** `git pull`, fetch `generation_config.json` from the base repo (optional), `serve` again; expect S3-02 (`libamdhip64.so`) next.
+
+## 2026-10-30: serve reaches READY on Windows (S4-01 done)
+
+- After the `startup_health` fix: `qserve: READY on http://127.0.0.1:8000 model=Qwen3.8-Flash-Yamz ctx=8192 sessions=1 speculative=False vision=False (start-up 236 s)` **[V: user report]**. Model loaded, kernels compiled/autotuned (cold Triton cache); no `libamdhip64.so` error reported, so the S3-02 path may not have been hit yet (JIT HIP kernels may only run on the first request) **[?]**.
+- **Next:** S4-03: one chat completion with thinking disabled (below), then `/health`, `/v1/models`, streaming. Watch the server console during the first request for JIT-kernel failures (`libamdhip64`, hipcc resolution).

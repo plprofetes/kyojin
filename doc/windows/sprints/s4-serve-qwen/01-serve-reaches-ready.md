@@ -1,6 +1,6 @@
 # serve.py starts and reaches READY
 
-- Status: todo
+- Status: done
 - Depends: S3-01
 - Risk: MEDIUM-HIGH: the server pulls in memory management, metrics and tier code written for Linux.
 
@@ -21,6 +21,7 @@ Sprint: [Sprint 4: serve a small Qwen over HTTP](README.md) · ID S4-01 · prior
 
 **Evidence.** (run folders, versions, numbers; fill in)
 
+- 2026-10-30: `serve --model C:\models\qwen35-9b-4bpw` (turboderp/Qwen3.5-9B-exl3 @ 4.00bpw, 6.69 GiB) printed `qserve: READY on http://127.0.0.1:8000  model=Qwen3.8-Flash-Yamz ctx=8192 sessions=1 speculative=False vision=False (start-up 236 s)` **[V: user report]**. Fixes needed on the way: `register_at_fork` guard, `allow_reuse_address` off on Windows, `PYTHONUTF8=1`. The 236 s include Triton compile/autotune (cold cache). No HIP JIT kernel has necessarily run yet [?]; run folder not yet seen.
 - 
 
 **Links.** [qwen serve.py](../../../../tools/qwen/serve.py) · [SERVE.md](../../../../tools/qwen/SERVE.md) · [memory util](../../../../exllamav3/util/memory.py) · next: [S4-02](02-first-launch-warmup.md)

@@ -56,5 +56,5 @@ One batched session, one zip of `logs\windows\*` plus a pasted `SUMMARY.txt` of 
 - Error catalogue: [error_catalogue.md](error_catalogue.md) was applied to `KNOWN` in `kyojin_win.py` (34 signatures, each with a sample test; dropped `msvc-flag-on-clang`, `triton-compiler`, `device-libs`).
 - New finding (verified by the reviewer in torch's code): `build` would have failed at once without `DISTUTILS_USE_SDK=1` after VsDevCmd; fixed.
 - Reviewer's concession: the triton-windows `readme` branch (`7b92538`) does list RDNA3.5/Strix Halo. Its compatibility table pairs torch 2.15 with Triton 3.9, so the default pin changed to `triton-windows==3.9.0.post30` (fallback 3.8.0.post29).
-- Draft awaiting consent: [drafts/](drafts/README.md) (standalone FLA Triton test).
+- The standalone FLA Triton test was added to the repo with the user's consent: `scripts/windows/fla_standalone_test.py` (the draft folder is gone).
 - Not verified by anyone: exact cl.exe error codes, whether `hipblas.lib`/`rocblas.lib` exist in the devel tree, HIP error text after a TDR, Event ID 4101 (common knowledge).

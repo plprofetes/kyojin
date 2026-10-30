@@ -10,7 +10,7 @@ Sprint: [Sprint 1: risk spikes (fail fast)](README.md) · ID S1-03 · priority o
 
 **Steps.**
 1. `kyojin_win.py check` and read the `triton` probe (vector add).
-2. Test a real Kyojin kernel WITHOUT importing `exllamav3` (that would start the 72-file JIT build and fail on Windows, see [review #6](../../review/opus-r1.md)): put `exllamav3\vendor` on `sys.path` and `import fla`; its modules import nothing from exllamav3 at module level. A standalone chunk-kernel-vs-naive-recurrence test is being drafted in review round 2; adding it to the repo needs the user's consent.
+2. Test a real Kyojin kernel WITHOUT importing `exllamav3` (that would start the 72-file JIT build and fail on Windows, see [review #6](../../review/opus-r1.md)): put `exllamav3\vendor` on `sys.path` and `import fla`; its modules import nothing from exllamav3 at module level. Run the standalone chunk-kernel-vs-naive-recurrence test (added with the user's consent, never run yet): `.venv-win\Scripts\python scripts\windows\fla_standalone_test.py` (tiny shapes, cold Triton compile dominates), then `--qwen` for the T=4096 prefill-sized timing (reference loop is slow). It prints one `SUMMARY` line to paste back; exit code 0 pass, 1 mismatch, 2 crash.
 3. The default pin is `triton-windows==3.9.0.post30` (torch 2.15 pairs with Triton 3.9 in the triton-windows README table; 3.9.0.post30 packs WMMA operands to fix excess VGPR use on gfx11/12). If it fails, fall back with `KYOJIN_TRITON_SPEC=triton-windows==3.8.0.post29` (Kyojin's Linux pin is triton 3.8.0) and run `setup` again. Always `import torch` before `import triton` (TheRock requirement).
 4. Note which C compiler Triton picked (clang-cl from the SDK vs MSVC) in the journal.
 

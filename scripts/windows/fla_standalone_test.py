@@ -1,6 +1,11 @@
 """Standalone check of Kyojin's vendored FLA Gated DeltaNet Triton kernels, without exllamav3_ext.
 
-Run from the repository root, inside the venv:   python fla_standalone_test.py [--T 100] [--qwen] [--reps 3]
+Run from the repository root with the venv interpreter:
+    .venv-win/Scripts/python scripts/windows/fla_standalone_test.py [--T 100] [--qwen] [--reps 3]
+
+Provenance: drafted by a read-only review subagent from tests/test_gated_delta_rule.py and the vendored fla API, written
+without a GPU and never run before it was added here. No third-party code is copied (the kernels it calls are vendored in
+this repo).
 
 Imports exllamav3/vendor/fla as a top-level package `fla` (sys.path trick), so exllamav3/__init__.py and ext.py
 (which would start a JIT build of the C++ extension) are never imported. Compares

@@ -55,3 +55,9 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - Resume with: `git pull`; stop the other workload; `check` (probe now reports the largest allocation that works and matmul per BLAS backend); `dir` for `lib\hipblas.lib`/`lib\rocblas.lib`; hello extension (S1-02); `build --jobs 1`. Send the run folders.
 - The other workload is GLM-4.5-Air Q4 (user): confirms that VRAM is held by it and `mem_get_info` over-reports free VRAM on Windows. Kyojin uses `mem_get_info` in 11 files (see S4-01 risk note). Open question for the user: Task Manager > Performance > GPU, Dedicated vs Shared GPU memory in use while it runs.
 - Task Manager numbers (user): Dedicated 95.2/95.8 GB used by the other runner, Shared 2.4/15.8. Explains the failed 1 GiB allocation; HIP allocations appear to come from the dedicated pool (usable ceiling about 95 GiB, not the 107.87 GiB torch reports) **[I]**. Option to keep working in parallel: restart the other runner with a smaller context so about 20 GB of dedicated memory stays free.
+
+## 2026-10-30: hardened Python and the Triton test (user consent given)
+
+- Added `scripts/windows/fla_standalone_test.py` (user consented): real vendored GDN chunk kernels vs a naive fp32 recurrence, no extension build needed; never run (no GPU in the authoring sandbox).
+- Hardened `setup`: exact uv-managed interpreter `3.12.16` (`KYOJIN_PY`, `--managed-python`), `--no-config` on every uv call, wheel tag derived from major.minor. The existing `.venv-win` already uses 3.12.16 managed; `setup --recreate` rebuilds it under the new rules (optional).
+- **Next session:** as in the previous entry, plus run `fla_standalone_test.py` right after `check` (S1-03).

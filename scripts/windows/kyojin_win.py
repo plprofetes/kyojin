@@ -53,7 +53,10 @@ ROCM_VER = os.environ.get("KYOJIN_ROCM_VER", "10.1.0a20260822")
 TORCH_VER = os.environ.get("KYOJIN_TORCH_VER", "2.15.0a0+rocm10.1.0a20260822")
 TRITON_SPEC = os.environ.get("KYOJIN_TRITON_SPEC", "triton-windows==3.9.0.post30")   # torch 2.15 pairs with Triton 3.9 in the triton-windows README table; fallback 3.8.0.post29 (Kyojin's Linux pin is triton 3.8.0)
 GFX = "gfx1151"
-PY_VER = "3.12"
+# Exact interpreter, uv-managed (hardened: independent of any system Python). 3.12.16 is what the first Windows setup resolved.
+PY_VER = os.environ.get("KYOJIN_PY", "3.12.16")
+PY_TAG = "cp" + "".join(PY_VER.split(".")[:2])     # wheel tag, e.g. cp312
+UV_FLAGS = ["--no-config", "--managed-python"]     # ignore user/system uv.toml, never use a system Python
 MIN_FREE_GB = 40          # my estimate (SDK devel ~12 GB on Linux + torch + build tree); tune after the first run
 GB_PER_JOB = 4            # my estimate for hipcc; Kyojin's Linux default is MAX_JOBS=6 ("unbounded ninja OOMs the box")
 DEFAULT_HIP_DEFINES = "EXL3_HIP_STG_PAD"   # same default as tools/strix_halo/rebuild.sh
@@ -762,7 +765,7 @@ def probe_index(run: Run) -> Check:
             d["error"] = f"{url}: {e}"
             return Check("amd_index", FAIL, f"cannot read {url}: {e}", d,
                          "check network/proxy; the index host may have moved (TheRock RELEASES.md lists https://nightly.repo.amd.com/rocm/whl-next/): set KYOJIN_ROCM_INDEX")
-        found[pkg] = parse_index_wheels(html, pkg, ver, f"cp{PY_VER.replace('.', '')}")
+        found[pkg] = parse_index_wheels(html, pkg, ver, PY_TAG)
     d["wheels"] = found
     d["seconds"] = round(time.monotonic() - t0, 1)
     missing = [p for p, w in found.items() if not w]
@@ -1051,19 +1054,19 @@ def cmd_setup(run: Run, args) -> int:
     uv = shutil.which("uv")
     assert uv
     steps = [
-        ([uv, "python", "install", PY_VER], "uv-python-install"),
+        ([uv, "python", "install", "--no-config", PY_VER], "uv-python-install"),
     ]
     if args.recreate and VENV.exists():
         shutil.rmtree(VENV)
     if not venv_python().is_file():
-        steps.append(([uv, "venv", str(VENV), "--python", PY_VER], "uv-venv"))
+        steps.append(([uv, "venv", *UV_FLAGS, str(VENV), "--python", PY_VER], "uv-venv"))
     py = str(venv_python())
     steps += [
         # 1. torch + ROCm runtime + SDK devel from the AMD index only (its dependency mirrors live there too)
-        ([uv, "pip", "install", "--python", py, "--index-url", AMD_INDEX, "--prerelease", "allow", "-v",
+        ([uv, "pip", "install", "--no-config", "--python", py, "--index-url", AMD_INDEX, "--prerelease", "allow", "-v",
           f"torch[device-{GFX}]=={TORCH_VER}", f"rocm[devel,device-{GFX}]=={ROCM_VER}"], "uv-pip-torch-rocm"),
         # 2. everything else from PyPI; torch/rocm are already satisfied and are not replaced
-        ([uv, "pip", "install", "--python", py, "--index-url", PYPI_INDEX, "-v", TRITON_SPEC, "-r", str(REPO / "requirements.txt")], "uv-pip-requirements"),
+        ([uv, "pip", "install", "--no-config", "--python", py, "--index-url", PYPI_INDEX, "-v", TRITON_SPEC, "-r", str(REPO / "requirements.txt")], "uv-pip-requirements"),
     ]
     for cmd, name in steps:
         r = run.run(cmd, name, timeout=3600, stream=True)
@@ -1083,7 +1086,7 @@ def cmd_setup(run: Run, args) -> int:
             if sub != ["init"]:
                 c.status = WARN       # rocm-sdk test/targets are diagnostics; only init is required
             run.add(c)
-    fr = run.run([uv, "pip", "freeze", "--python", py], "pip-freeze", stream=False)
+    fr = run.run([uv, "pip", "freeze", "--no-config", "--python", py], "pip-freeze", stream=False)
     (run.dir / "pip-freeze.txt").write_text(fr.out, encoding="utf-8")
     log.info("pip freeze saved to %s (pin from it once a build works)", run.dir / "pip-freeze.txt")
     sdk = run.add(probe_rocm_sdk(run))

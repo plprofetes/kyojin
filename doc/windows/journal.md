@@ -44,3 +44,5 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - `setup` succeeded end to end (see [S1-01 evidence](sprints/s1-risk-spikes/01-preflight-green.md)); toolchain is real: hipcc 7.16 / clang 23 for `x86_64-pc-windows-msvc`, gfx1151 target, headers present.
 - Probes `torch_gpu`/`triton` failed on low memory (OpenBLAS), not on the stack. Fixes: probes cap BLAS threads; PATH for `rocm-sdk test`; dead registry probe removed; `openblas-oom` signature; console heartbeat every 30 s when not `-v` (the user does not want to see all compiler output; run without `-v`, everything is in the run folder).
 - User will continue **in the next session**. **Next:** close the program using the GPU/RAM, `git pull`, run `check` (no `-v`), then the manual checks (`dir` for hipblas.lib/rocblas.lib; S1-04 memory snippet), hello extension (S1-02), first `build --jobs 1`.
+
+- `check` under load (other LLM on the GPU): torch probe hit `LLVM ERROR: out of memory` (not a toolchain verdict), Triton probe exposed my `python -c` bug (fixed: probes run from a file; torch probe prints `STEP` markers). Re-run `check` when the GPU/RAM are free.

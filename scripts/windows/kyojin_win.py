@@ -451,8 +451,8 @@ KNOWN: tuple[Known, ...] = (
           "Retry. Behind a proxy set HTTPS_PROXY and SSL_CERT_FILE. `doctor` amd_index tests reachability."),
     Known("compiler-oom", r"std::bad_alloc|LLVM ERROR: out of memory|C1060|compiler is out of heap space|unable to execute command: (Killed|Segmentation)|fatal error C1002",
           "Compiler ran out of memory",
-          "Too many parallel hipcc jobs for the free RAM.",
-          "Close other programs and re-run `build --jobs 2`."),
+          "LLVM (hipcc, or amd_comgr compiling a GPU kernel inside torch/Triton) could not allocate: free RAM is too low. Other programs, or a model running on the GPU, compete for the ~32 GB Windows can see.",
+          "Free RAM (stop the other GPU workload) and retry; for builds also use `build --jobs 1`. The log's last STEP line shows where a probe died."),
     Known("openblas-oom", r"OpenBLAS error: Memory allocation still failed",
           "numpy/OpenBLAS cannot allocate memory",
           "Free RAM is too low for OpenBLAS's per-thread buffers (this machine shows only ~32 GB to Windows, the rest is GPU-reserved).",
@@ -781,20 +781,28 @@ def venv_tool(name: str) -> Path:
 TORCH_PROBE = r"""
 import json, sys, time, traceback
 out = {"python": sys.version}
+def step(n): print("STEP", n, flush=True)
 try:
+    step("import torch")
     import torch
     out.update(torch=torch.__version__, hip=torch.version.hip, cuda=torch.version.cuda, file=torch.__file__)
+    step("cuda.is_available")
     out["is_available"] = torch.cuda.is_available()
     if out["is_available"]:
+        step("device properties + mem_get_info")
         p = torch.cuda.get_device_properties(0)
         free, total = torch.cuda.mem_get_info(0)
         out["device"] = dict(name=p.name, arch=getattr(p, "gcnArchName", None), total_gb=round(p.total_memory / 2**30, 2),
                              mem_free_gb=round(free / 2**30, 2), mem_total_gb=round(total / 2**30, 2), cus=p.multi_processor_count)
+        step("randn on device")
         a = torch.randn(512, 512, dtype=torch.float16, device="cuda")
+        step("fp16 matmul (first GPU kernels: rocBLAS/hipBLASLt load, may compile)")
         t = time.time(); (a @ a).sum().item(); torch.cuda.synchronize()
+        step("matmul done; 1 GiB allocation")
         out["matmul_fp16_512_ms"] = round((time.time() - t) * 1000, 1)
         big = torch.empty(int(2**30), dtype=torch.uint8, device="cuda"); del big
         out["alloc_1gib"] = "ok"
+    step("cpp_extension info")
     from torch.utils import cpp_extension as ce
     out["cpp_extension"] = dict(ROCM_HOME=ce.ROCM_HOME, IS_HIP_EXTENSION=ce.IS_HIP_EXTENSION, IS_WINDOWS=ce.IS_WINDOWS)
 except BaseException as e:
@@ -850,8 +858,11 @@ def run_probe_script(run: Run, name: str, script: str, env: dict[str, str] | Non
     # when free RAM is low (seen on the 32 GB Windows view of the 128 GB machine): keep the probes small
     env.setdefault("OPENBLAS_NUM_THREADS", "4")
     env.setdefault("OMP_NUM_THREADS", "4")
-    r = run.run([str(venv_python()), "-c", script], name, env=env, cwd=REPO, timeout=timeout, stream=False)
-    data: dict = {"exit": describe_exit(r.code), "log": r.logfile.name}
+    # a real file, not `-c`: triton's @jit needs the function source (inspect.getsourcelines) and tracebacks get line numbers
+    script_file = run.dir / f"{re.sub(r'[^A-Za-z0-9_.-]+', '_', name)}.py"
+    script_file.write_text(script, encoding="utf-8")
+    r = run.run([str(venv_python()), str(script_file)], name, env=env, cwd=REPO, timeout=timeout, stream=False)
+    data: dict = {"exit": describe_exit(r.code), "log": r.logfile.name, "script": script_file.name}
     for line in r.out.splitlines():
         if line.startswith("KYOJIN_PROBE_JSON="):
             with contextlib.suppress(json.JSONDecodeError):

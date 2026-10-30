@@ -113,3 +113,8 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 
 - `fla_standalone_test.py` PASS on the target: o err 2.3e-4, state err 1.1e-3 against the fp32 recurrence; cold 49.9 s, warm 0.7 ms; triton-windows 3.9.0.post30 **[V]**. The biggest unknown behind Qwen3.5 (GDN layers) is therefore cleared at small shapes; `--qwen` (T=4096) not run.
 - **Next:** S1-05 (model pack on disk) and S3-01 (end-to-end smoke via `serve`). Expected first failures from the catalogue: `register_at_fork` in `tools/startup_health.py` (patch saved), `libamdhip64.so` in `util/hip_lib.py` (S3-02 patch saved), POSIX-only memory/pagecache code.
+
+## 2026-10-30: constraints file was inconsistent (fixed)
+
+- The user's `uv pip install -c constraints-win.txt pydantic pydantic-core safetensors` failed: stable `pydantic==2.14.0` needs `typing-extensions>=4.16.0`, the freeze had 4.15.0 (matching the beta) **[V: uv error, reproduced here]**. My error: I had checked wheel availability but not that the set resolves. Fix: `typing-extensions==4.16.0` (the `uv.lock` version). Verified with `uv pip compile --python-platform windows --python-version 3.12 -c constraints-win.txt` over `requirements.txt` (minus torch) + `triton-windows==3.9.0.post30`: resolves, every resolved package is pinned, no version differs. The header of the file now records this command (rule: re-run it after every edit).
+- Not covered by that check: torch's own dependencies on the AMD index (`sympy`, `networkx`, `mpmath` are pinned but were not part of the compile) **[?]**.

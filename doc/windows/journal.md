@@ -53,3 +53,4 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 
 - GPU and most RAM are held by another LLM project of the user; `mem_get_info` over-reports free VRAM on Windows. Decision: wait. Nothing else to run until the machine is free.
 - Resume with: `git pull`; stop the other workload; `check` (probe now reports the largest allocation that works and matmul per BLAS backend); `dir` for `lib\hipblas.lib`/`lib\rocblas.lib`; hello extension (S1-02); `build --jobs 1`. Send the run folders.
+- The other workload is GLM-4.5-Air Q4 (user): confirms that VRAM is held by it and `mem_get_info` over-reports free VRAM on Windows. Kyojin uses `mem_get_info` in 11 files (see S4-01 risk note). Open question for the user: Task Manager > Performance > GPU, Dedicated vs Shared GPU memory in use while it runs.

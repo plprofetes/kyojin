@@ -1,6 +1,6 @@
 # Import the extension: DLL search path
 
-- Status: todo
+- Status: done
 - Depends: S2-01
 - Risk: MEDIUM. Python 3.8+ on Windows does not use PATH to resolve dependent DLLs of an extension module; ROCm DLLs may need `os.add_dll_directory`. Exact failing DLL unknown [?].
 
@@ -20,7 +20,7 @@ Sprint: [Sprint 2: the full extension builds and imports](README.md) · ID S2-02
 
 **Evidence.** (run folders, versions, numbers; fill in)
 
-- 2026-10-30: S2-01 link green (clang_rt.builtins fix). First `extension` probe: `ImportError: DLL load failed while importing exllamav3_ext` (the probe imported the extension BEFORE torch, so the ROCm/torch DLLs were not loaded yet) **[I]**. Probe now imports torch first (as `import exllamav3` does); result pending a re-run of `check`.
+- 2026-10-30: S2-01 link green (clang_rt.builtins fix). First `extension` probe: `ImportError: DLL load failed while importing exllamav3_ext` (the probe imported the extension BEFORE torch, so the ROCm/torch DLLs were not loaded yet) **[I]**. Probe now imports torch first (as `import exllamav3` does); `check` run `20261030-233000-check`: `extension` PASS, 135 symbols, `exllamav3` imported **[V]**. No `os.add_dll_directory` was needed once torch is imported first (the second failure was `tokenizers` 1.0.0rc3, see the journal).
 - 
 
 **Links.** [extension probe](../../../../scripts/windows/kyojin_win.py) · [exllamav3 __init__](../../../../exllamav3/__init__.py) · next: [S2-03](03-linux-no-regression.md)

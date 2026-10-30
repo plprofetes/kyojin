@@ -90,3 +90,9 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 ## 2026-10-30: extension links; first import fails with `DLL load failed`
 
 - `build` green and linked. The `extension` probe failed with `DLL load failed while importing exllamav3_ext`. The probe imported the extension before `torch`; Python 3.8+ does not resolve an extension's dependent DLLs from PATH, and the ROCm/torch DLLs are only loaded once `torch` is imported **[I]**. Probe changed to `import torch` first (S2-02). If it still fails, the next step is `os.add_dll_directory(<sdk>\bin)` and a dependency dump (`dumpbin /dependents`) to name the missing DLL.
+
+## 2026-10-30: `import exllamav3` fails: `cannot import name 'models' from 'tokenizers'`
+
+- The extension imports once torch is loaded (`import torch, exllamav3_ext` OK). `import exllamav3` then failed at `exllamav3/tokenizer/tokenizer.py:4` **[V]**: the venv has **tokenizers 1.0.0-rc.3** (a flat `tokenizers.pyd`, no `models`/`decoders` subpackages) **[V: directory listing]**. `requirements.txt` says `>=0.21.1`; why uv chose the pre-release is not established (the requirements step passes no `--prerelease`) **[?]**. PyPI has 0.23.3 (cp310-abi3 win_amd64 wheel, the version in `uv.lock`).
+- Fix: `setup` pins `tokenizers==0.23.3` next to the triton pin (`TOKENIZERS_SPEC`, env `KYOJIN_TOKENIZERS_SPEC`), recorded in `env.json` pins and assessment 7d. Signature `tokenizers-rc`. The repo's own `requirements.txt` is untouched (Linux).
+- Immediate repair without `setup`: `uv pip install --no-config --python .venv-win\Scripts\python.exe tokenizers==0.23.3`. Other dependencies may have drifted the same way; compare `pip-freeze.txt` with `uv.lock` (deferred check).

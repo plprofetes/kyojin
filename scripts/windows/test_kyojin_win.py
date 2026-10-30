@@ -173,6 +173,7 @@ class HelpfulErrors(unittest.TestCase):
         "no-ninja-fallback": "clang: error: no such file or directory: '/EHsc'",
         "cpu-target-feature": "error: always_inline function '_mm256_set1_ps' requires target feature 'avx', but would be inlined into function 'prepare_block_avx2'",
         "compiler-rt-builtin": "stloader_cu.obj : error LNK2001: nierozpoznany symbol zewn\u0105trzny __truncsfhf2",
+        "tokenizers-rc": "ImportError: cannot import name 'models' from 'tokenizers' (C:\\x\\tokenizers\\__init__.py)",
         "flag-leak": "clang: error: unknown argument: '-Xcompiler=/Zc:preprocessor'",
         "python-h": "fatal error: 'Python.h' file not found",
         "ext-not-built": "ImportError: exllamav3_ext is not built. On Windows with ROCm torch the JIT build is not supported",

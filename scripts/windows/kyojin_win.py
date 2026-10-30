@@ -51,6 +51,7 @@ AMD_INDEX = os.environ.get("KYOJIN_ROCM_INDEX", "https://rocm.nightlies.amd.com/
 PYPI_INDEX = "https://pypi.org/simple"
 ROCM_VER = os.environ.get("KYOJIN_ROCM_VER", "10.1.0a20260822")
 TORCH_VER = os.environ.get("KYOJIN_TORCH_VER", "2.15.0a0+rocm10.1.0a20260822")
+TOKENIZERS_SPEC = os.environ.get("KYOJIN_TOKENIZERS_SPEC", "tokenizers==0.23.3")   # = uv.lock; requirements.txt (>=0.21.1) let uv pick 1.0.0rc3, a different package layout without tokenizers.models
 TRITON_SPEC = os.environ.get("KYOJIN_TRITON_SPEC", "triton-windows==3.9.0.post30")   # torch 2.15 pairs with Triton 3.9 in the triton-windows README table; fallback 3.8.0.post29 (Kyojin's Linux pin is triton 3.8.0)
 GFX = "gfx1151"
 # Exact interpreter, uv-managed (hardened: independent of any system Python). 3.12.16 is what the first Windows setup resolved.
@@ -148,7 +149,7 @@ class Run:
         log.info("repo commit %s (%d uncommitted paths)", sha[:12] or "unknown", dirty)
         data = {
             "repo_commit": sha, "repo_uncommitted_paths": dirty,
-            "pins": {"amd_index": AMD_INDEX, "rocm": ROCM_VER, "torch": TORCH_VER, "triton": TRITON_SPEC, "python": PY_VER},
+            "pins": {"amd_index": AMD_INDEX, "rocm": ROCM_VER, "torch": TORCH_VER, "triton": TRITON_SPEC, "tokenizers": TOKENIZERS_SPEC, "python": PY_VER},
             "argv": sys.argv,
             "cwd": os.getcwd(),
             "python": sys.version,
@@ -497,6 +498,10 @@ KNOWN: tuple[Known, ...] = (
           "compiler-rt builtin missing at link time",
           "clang emitted a call to a compiler-rt helper; link.exe only sees the MSVC CRT, so clang_rt.builtins-x86_64.lib must be linked explicitly [I].",
           "setup.py adds <sdk>\\lib\\llvm\\lib\\clang\\<ver>\\lib\\windows\\clang_rt.builtins-x86_64.lib (Windows+HIP); check it exists, or use `-Xarch_host -mf16c`."),
+    Known("tokenizers-rc", r"cannot import name 'models' from 'tokenizers'",
+          "tokenizers 1.0.0 pre-release installed (different package layout)",
+          "uv resolved requirements.txt (tokenizers>=0.21.1) to 1.0.0rc3, which has no tokenizers.models [V on the user's machine].",
+          "`uv pip install --no-config --python .venv-win\\Scripts\\python.exe tokenizers==0.23.3`, or `setup` (pins it)."),
     Known("python-h", r"fatal error: 'Python\.h' file not found|Cannot open include file: 'Python\.h'",
           "Python headers missing",
           "The venv interpreter has no include/ directory (non-uv or Microsoft Store Python).",
@@ -1100,7 +1105,7 @@ def cmd_setup(run: Run, args) -> int:
         ([uv, "pip", "install", "--no-config", "--python", py, "--index-url", AMD_INDEX, "--prerelease", "allow", "-v",
           f"torch[device-{GFX}]=={TORCH_VER}", f"rocm[devel,device-{GFX}]=={ROCM_VER}"], "uv-pip-torch-rocm"),
         # 2. everything else from PyPI; torch/rocm are already satisfied and are not replaced
-        ([uv, "pip", "install", "--no-config", "--python", py, "--index-url", PYPI_INDEX, "-v", TRITON_SPEC, "-r", str(REPO / "requirements.txt")], "uv-pip-requirements"),
+        ([uv, "pip", "install", "--no-config", "--python", py, "--index-url", PYPI_INDEX, "-v", TRITON_SPEC, TOKENIZERS_SPEC, "-r", str(REPO / "requirements.txt")], "uv-pip-requirements"),
     ]
     for cmd, name in steps:
         r = run.run(cmd, name, timeout=3600, stream=True)

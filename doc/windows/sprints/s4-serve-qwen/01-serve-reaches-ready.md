@@ -26,3 +26,5 @@ Sprint: [Sprint 4: serve a small Qwen over HTTP](README.md) · ID S4-01 · prior
 **Links.** [qwen serve.py](../../../../tools/qwen/serve.py) · [SERVE.md](../../../../tools/qwen/SERVE.md) · [memory util](../../../../exllamav3/util/memory.py) · next: [S4-02](02-first-launch-warmup.md)
 
 Depends on: [S3-01](../s3-runtime-kernels/01-end-to-end-smoke.md)
+
+- Known risk from the Windows data (S1-04): Kyojin sizes memory with `torch.cuda.mem_get_info()` (11 files incl. `tools/qwen/serve.py:2265` free-VRAM guard `MIN_FREE_MIB`, `exllamav3/model/model.py`, `model_init.py`, `util/memory.py`, `loader/safetensors.py`). On Windows that call over-reports free VRAM while another process holds it (107.55 GiB reported, 1 GiB allocation failed), so auto-sizing and the free-VRAM guard can mislead; expect OOMs at load/first prefill if the GPU is shared. Run with the GPU otherwise idle for the POC and size `-c`/model explicitly.

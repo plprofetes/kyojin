@@ -156,6 +156,20 @@ class Run:
             log.log(lvl, "         -> %s", c.hint)
         return c
 
+    def fail_step(self, r: "Result", title: str, cmd: list[str] | None = None, default_hint: str = "") -> Check:
+        """A failed subprocess step: diagnose, extract root-cause lines, print and persist a shareable FAILURE.md entry."""
+        text = r.out + "\n" + r.error
+        known = diagnose(text)
+        errors = extract_errors(r.out, first_line_no=2)       # step log line 1 is the "$ command" header
+        block = render_failure(title, cmd or [r.name], r.code, r.seconds, r.logfile.name, known, errors, r.tail(12))
+        for line in block.splitlines():
+            log.error(line)
+        with open(self.dir / "FAILURE.md", "a", encoding="utf-8") as f:
+            f.write("```text\n" + block + "\n```\n\n")
+        hint = (known[0].fix if known else default_hint) or f"see {r.logfile.name}"
+        return Check(r.name, FAIL, f"{title}: {describe_exit(r.code)}" + (f" [{known[0].id}]" if known else ""),
+                     {"log": r.logfile.name, "known": [k.id for k in known], "first_errors": errors, "tail": r.tail(20)}, hint)
+
     def write_report(self):
         data = [dataclasses.asdict(c) for c in self.checks]
         (self.dir / "report.json").write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
@@ -315,6 +329,145 @@ def sdk_env(root: Path, base: dict[str, str]) -> dict[str, str]:
 def serve_command(py: str, model: str, port: int, ctx: int) -> list[str]:
     return [py, "-u", str(REPO / "tools" / "qwen" / "serve.py"), "--model", model, "--port", str(port),
             "-c", str(ctx), "--no-vision", "--draft-policy", "off"]
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# helpful errors: failure signatures, first-error extraction, FAILURE.md
+# ----------------------------------------------------------------------------------------------------------------------
+
+@dataclasses.dataclass(frozen=True)
+class Known:
+    id: str
+    pattern: str        # regex, searched case-insensitively over the failing step's output
+    title: str
+    cause: str
+    fix: str
+
+
+# HYPOTHESES from how these toolchains usually fail, not yet observed on this stack. When a real failure matches
+# nothing here, add its signature after the first run (see doc/windows-deferred.md, "error catalogue").
+KNOWN: tuple[Known, ...] = (
+    Known("no-msvc", r"Microsoft Visual C\+\+ 1\d\.\d or greater is required|Unable to find vcvarsall|cl\.exe.*not (found|recognized)|'cl' is not recognized",
+          "MSVC compiler not found",
+          "Visual Studio Build Tools (C++ workload) is missing or its environment was not loaded.",
+          "Install Build Tools with the 'Desktop development with C++' workload, then run `doctor` (visual_studio must PASS)."),
+    Known("missing-win-headers", r"C1083: Cannot open include file: '(windows\.h|type_traits|stdio\.h|vcruntime\.h)'|'(windows\.h|vcruntime\.h)' file not found",
+          "Windows SDK / MSVC headers not visible to the compiler",
+          "INCLUDE/LIB are not set: the Visual Studio developer environment was not applied to this compile.",
+          "Run via this script's `build` (it applies VsDevCmd.bat). Check build-env.json for INCLUDE and LIB. Install the Windows 11 SDK component if `doctor` shows none."),
+    Known("missing-hip-headers", r"fatal error: '(hip/[^']+|hipblas/[^']+|hipsparse/[^']+|thrust/[^']+|rocblas/[^']+)' file not found",
+          "ROCm SDK headers missing",
+          "The rocm-sdk-devel tree is not expanded, or ROCM_HOME points at the wrong directory.",
+          "Run `.venv-win\\Scripts\\rocm-sdk init`, then `doctor` (rocm_sdk details.headers must be all true)."),
+    Known("missing-import-lib", r"LNK1181: cannot open input file '?(hipblas|amdhip64|c10_hip|torch_hip|torch_python)[^']*\.lib",
+          "Import library not found at link time",
+          "The linker cannot find a .lib: torch/ROCm library directories are not on LIB, or the SDK devel tree lacks lib/.",
+          "Check build-env.json LIB; confirm `doctor` rocm_sdk root_listing has lib/. A missing hipblas.lib means the devel tree is incomplete: re-run `rocm-sdk init`."),
+    Known("device-libs", r"cannot find ROCm device library|device-libs|amdgcn[\\/]bitcode",
+          "ROCm device library (bitcode) not found",
+          "clang cannot locate the amdgcn bitcode directory.",
+          "Check HIP_DEVICE_LIB_PATH in build-env.json; it must be <sdk>\\lib\\llvm\\amdgcn\\bitcode (or <sdk>\\amdgcn\\bitcode)."),
+    Known("torch-not-rocm", r"CUDA_HOME environment variable is not set|CUDAExtension.*CUDA_HOME",
+          "torch does not see a ROCm toolchain",
+          "Either torch is not a ROCm wheel, or ROCM_HOME/HIP_PATH was not set for the build.",
+          "Run `doctor`: torch_gpu must show hip. If it does, the build env was not applied; use this script's `build`."),
+    Known("build-isolation", r"No module named 'torch'|ModuleNotFoundError: No module named 'torch'",
+          "build ran outside the venv (torch not importable)",
+          "pip/uv built in an isolated environment without torch.",
+          "Use `build` (it passes --no-build-isolation with the venv interpreter). Do not run pip install . by hand."),
+    Known("path-too-long", r"path.{0,20}too long|filename or extension is too long|Filename too long|WinError 206|LNK1104: cannot open file '[^']{240,}",
+          "Windows path length limit",
+          "A generated object/hipify path exceeds 260 characters (long paths disabled or repo path too deep).",
+          "Enable long paths (see `doctor` longpaths hint) or clone to a short path such as C:\\k."),
+    Known("dll-missing", r"DLL load failed while importing|WinError 126|WinError 127|0xC0000135|The specified module could not be found",
+          "A DLL could not be loaded",
+          "A dependent DLL is not on PATH: usually the ROCm SDK bin directory, the VC++ runtime, or a mismatched extension build.",
+          "Run `check` (it adds the SDK bin to PATH). If it still fails: `python -c \"import torch\"` inside .venv-win, and compare the DLL named in the log against `doctor` rocm_sdk bin_listing."),
+    Known("entrypoint", r"0xC0000139|procedure entry point .* could not be located|ENTRYPOINT_NOT_FOUND",
+          "DLL version mismatch",
+          "An extension built against one torch/ROCm version is loading with another.",
+          "Rebuild: `build --clean`. Do not mix wheels from different index dates (compare pip-freeze.txt)."),
+    Known("no-matching-dist", r"No matching distribution found|Could not find a version that satisfies|no version of torch|not found in the package registry|is not available on",
+          "A pinned package version is not on the index",
+          "The AMD nightly was pruned or the pin does not exist for this Python.",
+          "Run `doctor` (amd_index lists the wheels found). Pick an existing version and set KYOJIN_TORCH_VER / KYOJIN_ROCM_VER."),
+    Known("network", r"Connection (reset|aborted|refused)|timed out|TimeoutError|SSL(Error|: CERTIFICATE)|Temporary failure in name resolution|getaddrinfo failed|Failed to download",
+          "Network failure",
+          "A download from the package index failed (proxy, VPN, firewall or transient).",
+          "Retry. Behind a corporate proxy set HTTPS_PROXY and SSL_CERT_FILE. `doctor` amd_index tests reachability."),
+    Known("oom", r"std::bad_alloc|LLVM ERROR: out of memory|out of memory|C1060|compiler is out of heap space|clang: error: unable to execute command: (Killed|Segmentation)|fatal error C1002",
+          "Compiler ran out of memory",
+          "Too many parallel hipcc jobs for the free RAM.",
+          "Close other programs and re-run `build --jobs 2` (see cpu_ram in the build log for free RAM)."),
+    Known("file-locked", r"PermissionError: \[WinError (5|32)\]|Access is denied|being used by another process",
+          "File locked or access denied",
+          "Another process (a running python, an editor, antivirus) holds a file in the repo or .venv-win.",
+          "Stop python.exe processes started from this repo, close editors on it, add the repo and .venv-win to antivirus exclusions, retry."),
+    Known("flag-leak", r"unknown argument:? '?-X(compiler|cudafe)|unknown argument: '-Xcompiler|clang: error: unknown argument",
+          "An nvcc-only flag reached hipcc",
+          "setup.py passed a CUDA/nvcc option into the HIP compile.",
+          "Look at the failing command in the log (ninja prints it after FAILED:) and gate that flag in setup.py for torch.version.hip."),
+    Known("msvc-flag-on-clang", r"cl : Command line (warning|error) D9002|D8021|D8004",
+          "A GCC/clang flag reached cl.exe",
+          "setup.py passed a non-MSVC option to the host C++ compiler.",
+          "Gate that flag in setup.py for Windows (see how -Wno-register is gated)."),
+    Known("python-h", r"Cannot open include file: 'Python\.h'|Python\.h: No such file",
+          "Python headers missing",
+          "The venv interpreter has no include/ directory (non-uv Python or Microsoft Store Python).",
+          "Recreate the venv: `setup --recreate` (uv installs a full CPython 3.12)."),
+    Known("invalid-device-function", r"invalid device function|hipErrorNoBinaryForGpu|no kernel image is available",
+          "GPU code object does not match this GPU",
+          "The extension or a JIT kernel was compiled for a different architecture than the installed GPU.",
+          "Confirm `doctor` torch_gpu arch is gfx1151, then `build --clean`. PYTORCH_ROCM_ARCH must be gfx1151."),
+    Known("triton-compiler", r"Failed to find C compiler|clang-cl.*(not found|No such)|Please specify one with the CC|CalledProcessError.*(clang-cl|cl\.exe)",
+          "Triton cannot find a C compiler for its launcher stub",
+          "triton-windows could not find clang-cl (from the ROCm SDK wheel) or MSVC cl.exe.",
+          "Run Triton checks through `check` (applies SDK PATH). Otherwise put <sdk>\\lib\\llvm\\bin on PATH or set CC to clang-cl.exe."),
+    Known("no-triton", r"No module named 'triton'",
+          "triton-windows not installed",
+          "setup did not complete, or the wrong interpreter ran.",
+          "Run `setup`; verify `.venv-win\\Scripts\\python -c \"import triton\"`."),
+)
+
+ERROR_LINE = re.compile(r"(?i)(\berror\b|\bfatal\b|FAILED:|Traceback \(most recent|\bLNK\d{4}\b|\bC\d{4}:|cannot open|no such file|"
+                        r"undefined (symbol|reference)|unresolved external|not found|Segmentation|access violation)")
+ERROR_NOISE = re.compile(r"(?i)(\b0 errors?\b|-Werror|-Wno-error|error_code|warning:|errors?[- ]handling|stderr)")
+
+
+def diagnose(text: str) -> list[Known]:
+    """Known failure signatures present in text, in catalogue order."""
+    return [k for k in KNOWN if re.search(k.pattern, text or "", re.I)]
+
+
+def extract_errors(text: str, limit: int = 6, first_line_no: int = 1) -> list[tuple[int, str]]:
+    """The FIRST error-looking lines (the root cause is almost never in the tail), with their line numbers."""
+    out = []
+    for i, line in enumerate((text or "").splitlines(), start=first_line_no):
+        if ERROR_LINE.search(line) and not ERROR_NOISE.search(line):
+            out.append((i, line.strip()[:300]))
+            if len(out) >= limit:
+                break
+    return out
+
+
+def render_failure(title: str, cmd: list[str], code: int | None, seconds: float, logname: str, known: list[Known],
+                   errors: list[tuple[int, str]], tail: str, extra: dict | None = None) -> str:
+    """Human-readable failure block (console + FAILURE.md)."""
+    L = [f"FAILED: {title}", f"  command : {' '.join(_q(c) for c in cmd)}", f"  exit    : {describe_exit(code)} after {seconds:.0f}s",
+         f"  log     : {logname}"]
+    if known:
+        for k in known[:3]:
+            L += [f"  likely  : {k.title} [{k.id}]", f"    why   : {k.cause}", f"    fix   : {k.fix}"]
+    else:
+        L += ["  likely  : no known signature matched (new failure: please send the log folder)"]
+    if errors:
+        L.append(f"  first error lines (line numbers refer to {logname}):")
+        L += [f"    L{n}: {t}" for n, t in errors]
+    if tail.strip():
+        L += ["  last output:"] + [f"    | {t}" for t in tail.splitlines()[-12:]]
+    for k, v in (extra or {}).items():
+        L.append(f"  {k}: {v}")
+    return "\n".join(L)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -613,6 +766,18 @@ def run_probe_script(run: Run, name: str, script: str, env: dict[str, str] | Non
     return r, data
 
 
+def probe_error(name: str, d: dict, default_hint: str) -> Check:
+    """FAIL check for a probe snippet that reported an error: diagnosis from the traceback, first line as summary."""
+    known = diagnose(d.get("traceback", "") + "\n" + d.get("error", ""))
+    d["known"] = [k.id for k in known]
+    first = d["error"].splitlines()[0] if d.get("error") else "failed"
+    if known:
+        k = known[0]
+        d["why"] = k.cause
+        return Check(name, FAIL, f"{first}  [{k.id}: {k.title}]", d, k.fix)
+    return Check(name, FAIL, first, d, default_hint)
+
+
 def need_venv() -> Check | None:
     if venv_python().is_file():
         return None
@@ -659,7 +824,7 @@ def probe_torch(run: Run, env: dict[str, str] | None = None) -> Check:
         return Check("torch_gpu", SKIP, "venv missing", {}, miss.hint)
     r, d = run_probe_script(run, "probe-torch", TORCH_PROBE, env)
     if "error" in d:
-        return Check("torch_gpu", FAIL, d["error"].splitlines()[0], d, "see probe-torch log; common: driver too old, wrong torch wheel, DLL missing")
+        return probe_error("torch_gpu", d, "see probe-torch log; common: driver too old, wrong torch wheel, DLL missing")
     dev = d.get("device") or {}
     if not d.get("hip"):
         return Check("torch_gpu", FAIL, f"torch {d.get('torch')} is not a ROCm build (torch.version.hip empty)", d, "re-run setup")
@@ -679,7 +844,7 @@ def probe_triton(run: Run, env: dict[str, str] | None = None) -> Check:
         return Check("triton", SKIP, "venv missing", {}, miss.hint)
     r, d = run_probe_script(run, "probe-triton", TRITON_PROBE, env)
     if "error" in d:
-        return Check("triton", FAIL, d["error"].splitlines()[0], d, "see probe-triton log; triton-windows needs clang-cl (ships in the ROCm SDK wheel) or MSVC")
+        return probe_error("triton", d, "see probe-triton log; triton-windows needs clang-cl (ships in the ROCm SDK wheel) or MSVC")
     return Check("triton", PASS if d.get("ok") else FAIL, f"triton {d.get('triton')}; vector add max error {d.get('max_abs_err')}", d,
                  "" if d.get("ok") else "kernel ran but results differ")
 
@@ -693,7 +858,7 @@ def probe_extension(run: Run, env: dict[str, str] | None = None) -> Check:
     e["PYTHONPATH"] = str(REPO) + os.pathsep + e.get("PYTHONPATH", "")
     r, d = run_probe_script(run, "probe-extension", EXT_PROBE, e)
     if "error" in d:
-        return Check("extension", FAIL, d["error"].splitlines()[0], d, "run `build` first; if built, see probe-extension log (missing DLLs? run with -v)")
+        return probe_error("extension", d, "run `build` first; if built, see probe-extension log (missing DLLs? run with -v)")
     return Check("extension", PASS, f"exllamav3_ext at {d['file']}; {d['n_symbols']} symbols; exllamav3 {d['exllamav3']}", d)
 
 
@@ -757,14 +922,19 @@ def cmd_setup(run: Run, args) -> int:
     for cmd, name in steps:
         r = run.run(cmd, name, timeout=3600, stream=True)
         if not r.ok:
-            run.add(Check(name, FAIL, f"exit {describe_exit(r.code)}", {"log": r.logfile.name, "tail": r.tail()}, f"see {r.logfile.name}; last lines:\n{r.tail(15)}"))
+            run.add(run.fail_step(r, name, cmd))
             return run.summary()
         run.add(Check(name, PASS, f"{r.seconds:.0f}s", {"log": r.logfile.name}))
     tool = str(venv_tool("rocm-sdk"))
     for sub, name in ((["init"], "rocm-sdk-init"), (["test"], "rocm-sdk-test"), (["targets"], "rocm-sdk-targets")):
         r = run.run([tool, *sub], name, timeout=1800, stream=True)
-        run.add(Check(name, PASS if r.ok else (FAIL if sub == ["init"] else WARN), f"exit {describe_exit(r.code)}",
-                      {"log": r.logfile.name, "tail": r.tail(10)}, f"see {r.logfile.name}" if not r.ok else ""))
+        if r.ok:
+            run.add(Check(name, PASS, f"{r.seconds:.0f}s", {"log": r.logfile.name, "tail": r.tail(10)}))
+        else:
+            c = run.fail_step(r, name, [tool, *sub])
+            if sub != ["init"]:
+                c.status = WARN       # rocm-sdk test/targets are diagnostics; only init is required
+            run.add(c)
     fr = run.run([uv, "pip", "freeze", "--python", py], "pip-freeze", stream=False)
     (run.dir / "pip-freeze.txt").write_text(fr.out, encoding="utf-8")
     log.info("pip freeze saved to %s (pin from it once a build works)", run.dir / "pip-freeze.txt")
@@ -804,9 +974,13 @@ def cmd_build(run: Run, args) -> int:
     cmd = [uv, "pip", "install", "--python", str(venv_python()), "--no-build-isolation", "--no-deps", "-v", "-e", str(REPO)]
     r = run.run(cmd, "build-extension", env=env, cwd=REPO, timeout=4 * 3600, stream=True)
     pyds = sorted(p.name for p in REPO.glob("exllamav3_ext*.pyd"))
-    run.add(Check("build", PASS if r.ok else FAIL, f"{describe_exit(r.code)} in {r.seconds / 60:.1f} min; artifacts: {pyds}",
-                  {"log": r.logfile.name, "pyd": pyds, "tail": r.tail(40)},
-                  "" if r.ok else f"see {r.logfile.name}; search it for 'error' / 'FAILED:' (ninja prints the failing command)"))
+    if r.ok and not pyds:
+        run.add(Check("build", FAIL, "install succeeded but no exllamav3_ext*.pyd was produced", {"log": r.logfile.name},
+                      "was EXLLAMA_NOCOMPILE set? run `build --clean`; check the log for 'building exllamav3_ext'"))
+    elif r.ok:
+        run.add(Check("build", PASS, f"{r.seconds / 60:.1f} min; artifacts: {pyds}", {"log": r.logfile.name, "pyd": pyds}))
+    else:
+        run.add(run.fail_step(r, "build exllamav3_ext", cmd, "search the log for 'FAILED:' (ninja prints the failing command after it)"))
     if r.ok:
         run.add(probe_extension(run, env))
     return run.summary()
@@ -868,6 +1042,11 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         log.error("interrupted")
         return 130
+    except Exception:  # noqa: BLE001
+        import traceback
+        log.error("INTERNAL ERROR in kyojin_win.py (a bug in this script, not your environment):\n%s", traceback.format_exc())
+        log.error("Please send the log folder: %s", run.dir)
+        return 2
     finally:
         run.write_report()
         run.close()

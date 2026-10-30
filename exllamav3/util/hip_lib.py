@@ -58,7 +58,75 @@ def find_hip_runtime(lib_dir: str | None = None, read_maps = _read_proc_maps) ->
     return best
 
 
+# Windows: the runtime is amdhip64_<major>.dll in _rocm_sdk_core\bin (rocm_sdk _dist_info: "amdhip64*.dll"), loaded by
+# `import torch`. A JIT kernel must use that same module instance: loading another copy of the DLL creates a second
+# HIP context, in which torch's pointers and streams are invalid (the bug triton-windows fixed in 7feb4df8).
+_WIN_NAME = re.compile(r"amdhip64(_\d+)?\.dll", re.I)
+
+
+def _win_candidate_dirs() -> list[str]:
+    dirs = []
+    try:
+        import torch
+        dirs.append(os.path.join(os.path.dirname(torch.__file__), "lib"))
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import rocm_sdk
+        dirs += [str(p.parent) for p in rocm_sdk.find_libraries("amdhip64")]
+    except Exception:  # noqa: BLE001
+        pass
+    return dirs
+
+
+def _win_module_path(basename: str) -> str | None:
+    """Full path of `basename` if this process has it loaded (GetModuleHandleW), else None. Never loads anything."""
+    k32 = ctypes.WinDLL("kernel32", use_last_error = True)
+    k32.GetModuleHandleW.restype = ctypes.c_void_p
+    k32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
+    k32.GetModuleFileNameW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_uint32]
+    h = k32.GetModuleHandleW(basename)
+    if not h:
+        return None
+    buf = ctypes.create_unicode_buffer(32768)
+    n = k32.GetModuleFileNameW(h, buf, len(buf))
+    return buf.value[:n] if n else None
+
+
+def find_hip_runtime_windows(dirs: list[str] | None = None, list_dir = os.listdir, module_path = None) -> str | None:
+    """Path of the amdhip64*.dll this process already loaded (searched by the DLL names found in `dirs`, default: the
+    torch lib directory and rocm_sdk's), else the highest-versioned one on disk, else None."""
+    module_path = module_path or _win_module_path
+    names = set()
+    for d in (dirs if dirs is not None else _win_candidate_dirs()):
+        try:
+            names |= {(d, f) for f in list_dir(d) if _WIN_NAME.fullmatch(f)}
+        except OSError:
+            continue
+    for _, f in sorted(names, key = lambda x: _version_key_win(x[1]), reverse = True):
+        loaded = module_path(f)
+        if loaded:
+            return loaded
+    if not names:
+        return None
+    d, f = max(names, key = lambda x: _version_key_win(x[1]))
+    path = os.path.join(d, f)
+    if path not in _logged:
+        _logged.add(path)
+        print(f"hip_lib: no amdhip64 DLL loaded in this process yet (import torch first); using {path}", file = sys.stderr, flush = True)
+    return path
+
+
+def _version_key_win(name: str):
+    return tuple(int(x) for x in re.findall(r"\d+", name[len("amdhip64"):]))
+
+
 def load_hip_runtime(lib_dir: str | None = None) -> ctypes.CDLL:
+    if sys.platform == "win32":
+        path = find_hip_runtime_windows([lib_dir] if lib_dir else None)
+        if path is None:
+            raise OSError(f"no amdhip64*.dll in {lib_dir or 'the torch lib directory or the rocm_sdk core bin directory'}")
+        return ctypes.CDLL(path)   # same full path as the loaded module -> the same instance, no second HIP context
     path = find_hip_runtime(lib_dir)
     if path is None:
         raise OSError(f"no {_NAME} or {_NAME}.<version> in {lib_dir or 'the torch lib directory'}")

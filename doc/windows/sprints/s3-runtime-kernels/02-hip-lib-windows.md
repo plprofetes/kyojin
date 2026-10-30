@@ -1,6 +1,6 @@
 # util/hip_lib.py: find the HIP runtime DLL on Windows
 
-- Status: todo
+- Status: active
 - Depends: S2-02
 - Risk: MEDIUM. Hard-codes `libamdhip64.so` and reads `/proc/self/maps`; every JIT `.hsaco` kernel loads through `ctypes`.
 
@@ -21,6 +21,7 @@ Sprint: [Sprint 3: runtime kernels run](README.md) · ID S3-02 · priority order
 
 **Evidence.** (run folders, versions, numbers; fill in)
 
+- 2026-10-30: patch applied (`hip_lib_windows.patch`, 11 `tests/test_hip_lib.py` tests pass on Linux). Not yet verified on Windows: needs a JIT kernel that actually builds and loads (see the journal entry on `hip_compiler.py`).
 - 
 
 **Links.** [hip_lib.py](../../../../exllamav3/util/hip_lib.py) · next: [S3-03](03-jit-hip-kernels.md)

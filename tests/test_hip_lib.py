@@ -90,3 +90,42 @@ def test_default_dir_none_when_nothing_is_mapped_or_maps_unreadable():
 def test_explicit_dir_never_uses_the_mapped_library(tmp_path):
     hip_lib._logged.clear()
     assert hip_lib.find_hip_runtime(str(tmp_path), read_maps = lambda: _maps("/x/libamdhip64.so.7")) is None
+
+
+# Windows branch: pure functions with injected directory listings and loaded-module lookup (runs on Linux)
+
+def _win(dirs_files, loaded=None):
+    err = io.StringIO()
+    listing = {d: fs for d, fs in dirs_files.items()}
+    def list_dir(d):
+        if d not in listing:
+            raise OSError(d)
+        return listing[d]
+    module_path = lambda name: (loaded or {}).get(name)
+    with contextlib.redirect_stderr(err):
+        return hip_lib.find_hip_runtime_windows(list(dirs_files) + ["missing"], list_dir, module_path), err.getvalue()
+
+
+def test_windows_prefers_the_dll_torch_already_loaded():
+    hip_lib._logged.clear()
+    path, log = _win({"C:/sdk/bin": ["amdhip64_7.dll", "amdhip64_6.dll", "hiprtc0702.dll"]},
+                     loaded={"amdhip64_7.dll": "C:/sdk/bin/amdhip64_7.dll"})
+    assert path == "C:/sdk/bin/amdhip64_7.dll" and log == ""
+
+
+def test_windows_loaded_wins_over_a_higher_version_on_disk():
+    hip_lib._logged.clear()
+    path, _ = _win({"C:/a": ["amdhip64_8.dll"], "C:/b": ["amdhip64_7.dll"]},
+                   loaded={"amdhip64_7.dll": "C:/b/amdhip64_7.dll"})
+    assert path == "C:/b/amdhip64_7.dll"
+
+
+def test_windows_falls_back_to_highest_on_disk_and_logs_once():
+    hip_lib._logged.clear()
+    path, log = _win({"C:/sdk/bin": ["amdhip64_6.dll", "amdhip64_7.dll", "amdhip64.dll.bak"]})
+    assert path.endswith("amdhip64_7.dll") and "import torch first" in log
+    assert _win({"C:/sdk/bin": ["amdhip64_6.dll", "amdhip64_7.dll"]})[1] == ""
+
+
+def test_windows_none_when_absent():
+    assert _win({"C:/sdk/bin": ["hipblas.dll"]})[0] is None

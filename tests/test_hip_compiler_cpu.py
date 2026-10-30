@@ -50,6 +50,18 @@ def env(tmp_path, monkeypatch):
     hip_compiler.reset()
 
 
+def test_windows_sdk_layout_hipcc_exe(env, monkeypatch):
+    """The Windows SDK has bin/hipcc.exe and no extension-less hipcc: the resolver must find it via EXL3_ROCM_SDK."""
+    sdk = env / "sdk"; exe = fake_hipcc(sdk / "bin" / "hipcc.exe", "clang SDK")
+    monkeypatch.setenv("EXL3_ROCM_SDK", str(sdk))
+    hip_compiler.reset()
+    assert hip_compiler.resolve()["path"] is None          # POSIX naming on a .exe-only tree: not found (the 2026-10-30 Windows bug)
+    monkeypatch.setattr(hip_compiler, "_EXE", ".exe")
+    hip_compiler.reset()
+    r = hip_compiler.resolve()
+    assert r["path"] == str(exe) and r["source"] == "EXL3_ROCM_SDK" and r["sdk_ok"]
+
+
 def test_order_env_hipcc_first(env, monkeypatch):
     a = fake_hipcc(env / "a" / "hipcc", "clang A")
     sdk = env / "sdk"; fake_hipcc(sdk / "bin" / "hipcc", "clang SDK")

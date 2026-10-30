@@ -179,3 +179,7 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 
 - User has no Linux machine for this device. The 9B model card has only a KLD plot (no numbers) **[V: HF README]**, so there is no published figure to compare against. Plan for S3-05/S4-04: A/B on Windows between the default HIP chain and the engine's own fallback (`EXL3_PLE_HIP/DQ_HIP/GR_HIP/GDN_FUSE/GDN_HF=0`), which `serve.py` documents as bitwise-equal paths; compare greedy ids and logprobs (`logprobs`, `top_logprobs`, `return_token_ids`, non-streaming). Limits: it does not validate the stack against another platform or against the unquantized model.
 - `~/.cache/exllamav3/*.hsaco` (on Windows `%USERPROFILE%\.cache\exllamav3`) is where the JIT kernels land (`gdn_hf_*`, `gr_mix_*`, `ple_*`, `qsa_pf_*`); its listing is the S3-03 evidence. The default serve log shows only the compiler line.
+
+## 2026-10-30: JIT kernel list (S3-03)
+
+- `%USERPROFILE%\.cache\exllamav3` holds `gdn_hf_gfx1151_bfe9e89a80c14757.hsaco` (28,288 B) and `ple_gfx1151_a080d964d7fd73d4.hsaco` (34,392 B), both 31.10.2026 00:16:21-22, i.e. built by the first `serve` after the `hipcc.exe` fix **[V]**. No `gr_mix_*` or `qsa_pf_*` file for this dense 9B pack **[V]**; why is not established **[?]**.

@@ -1219,6 +1219,7 @@ def cmd_serve(run: Run, args) -> int:
     root = sdk.details.get("root")
     env = dict(os.environ)
     env["PYTHONPATH"] = str(REPO) + os.pathsep + env.get("PYTHONPATH", "")
+    env.setdefault("PYTHONUTF8", "1")      # cp1250 locale: serve.py and loaders call read_text() without encoding (instead of tools_qwen_serve_py.patch)
     if root:
         env["EXL3_ROCM_SDK"] = root       # util/hip_compiler.py resolves hipcc from this; ROCM_PATH/HIP_PATH deliberately not set at runtime
     cmd = serve_command(str(venv_python()), str(model), args.port, args.ctx)

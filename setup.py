@@ -71,8 +71,7 @@ if torch and torch_version.hip:
         extra_cuda_cflags += ["-D" + d]
     # ROCm 7.14 ships clang 22, which treats the deprecated `register` keyword as
     # a hard error in C++17 mode (older ROCm toolchains only warned).
-    if not windows:  # cl.exe takes no -Wno-register; hipcc (clang) below does
-        extra_cflags += ["-Wno-register"]
+    extra_cflags += ["-Wno-register"]   # host .cpp is compiled by clang-cl on Windows (set CXX/CC; see scripts/windows)
     extra_cuda_cflags += ["-Wno-register"]
     if dev_include := os.environ.get("EXL3_ROCM_DEV_INCLUDE"):
         extra_cflags += ["-I" + dev_include]
@@ -182,8 +181,9 @@ setup_kwargs = (
                 sources,
                 extra_compile_args=extra_compile_args,
                 include_dirs=[sources_dir],
-                # Windows needs an explicit import library; on ROCm that is hipBLAS (cf. upstream exllamav3 setup.py)
-                libraries=["hipblas" if torch_version.hip else "cublas"] if windows else [],
+                # Windows resolves every import at link time (Linux leaves them to the loader): hgemm.cu calls
+                # hipBLAS and, under USE_ROCM, rocBLAS directly, so both import libraries are needed on ROCm
+                libraries=(["hipblas", "rocblas"] if torch_version.hip else ["cublas"]) if windows else [],
             )
         ],
         "cmdclass": {"build_ext": cpp_extension.BuildExtension},

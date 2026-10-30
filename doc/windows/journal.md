@@ -135,3 +135,9 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 
 - After the `startup_health` fix: `qserve: READY on http://127.0.0.1:8000 model=Qwen3.8-Flash-Yamz ctx=8192 sessions=1 speculative=False vision=False (start-up 236 s)` **[V: user report]**. Model loaded, kernels compiled/autotuned (cold Triton cache); no `libamdhip64.so` error reported, so the S3-02 path may not have been hit yet (JIT HIP kernels may only run on the first request) **[?]**.
 - **Next:** S4-03: one chat completion with thinking disabled (below), then `/health`, `/v1/models`, streaming. Watch the server console during the first request for JIT-kernel failures (`libamdhip64`, hipcc resolution).
+
+## 2026-10-30: first generated text on Windows (POC goal reached at smoke level)
+
+- `serve` on Windows/gfx1151 answered a chat completion: "2+2 equals 4.", 25 prompt tokens in 231 ms, 8 tokens in 573 ms = 13.97 tok/s, no speculative decoding, Qwen3.5-9B EXL3 4.00bpw **[V: user's curl output]**. The model name in the request must be the served name `Qwen3.8-Flash-Yamz`.
+- Path so far: `setup` -> `build` (extension links with `clang_rt.builtins`, ninja on PATH, VsDevCmd env) -> `check` PASS -> pinned requirements -> Triton GDN test PASS -> `startup_health` patch -> `serve` READY (236 s cold) -> completion.
+- Not done / unverified: coherence on longer text (numeric parity vs Linux, S3-05), streaming, `/health`, `/v1/models`, multi-turn, speed vs Linux, warm start time, whether JIT HIP kernels were exercised (S3-02/03), Linux regression check of the shared-file edits (deferred.md, S2-03). Decode 14 tok/s is from 8 tokens on a cold server; not a benchmark.

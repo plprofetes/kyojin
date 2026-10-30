@@ -19,7 +19,7 @@ Status is edited in each task file; this table is generated: `python scripts/win
 |---|---|---|---|---|
 | 1 | S4-01 | [serve.py starts and reaches READY](01-serve-reaches-ready.md) | done | S3-01 |
 | 2 | S4-02 | [First-launch tuning and warm-up complete and are cached](02-first-launch-warmup.md) | todo | S4-01 |
-| 3 | S4-03 | [A chat completion returns coherent text](03-chat-completion.md) | todo | S4-01 |
+| 3 | S4-03 | [A chat completion returns coherent text](03-chat-completion.md) | active | S4-01 |
 | 4 | S4-04 | [Greedy parity through the API](04-api-parity.md) | todo | S4-03, S3-05 |
 | 5 | S4-05 | [Stability: sequential, long-context and soak](05-stability.md) | todo | S4-03 |
 <!-- tasks:end -->

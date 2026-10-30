@@ -9,8 +9,8 @@ Cut against `cca1e17`/`c4a9f87`; `git apply --check` passed on `c4a9f87`. None h
 | `hgemm.cu` (`_mkdir` under `_WIN32`) | **Applied** | S2-01 |
 | `kyojin_win` `sdk_env` (DISTUTILS_USE_SDK, CC/CXX clang-cl, HIP_CLANG_PATH) | **Applied** | S2-01 |
 | `hip_lib_windows.patch` | Saved, not applied (needed when the first JIT HIP kernel runs) | [S3-02](../../sprints/s3-runtime-kernels/02-hip-lib-windows.md) |
-| `tools_startup_health_py.patch` (`register_at_fork`, `allow_reuse_address`) | Saved, not applied | [S4-01](../../sprints/s4-serve-qwen/01-serve-reaches-ready.md) |
-| `tools_qwen_serve_py.patch` (UTF-8 `read_text`) | Saved, not applied | S4-01 |
+| `tools_startup_health_py.patch` (`register_at_fork`, `allow_reuse_address`) | **Applied** 2026-10-30 (first `serve` failed with `AttributeError: os.register_at_fork`) | [S4-01](../../sprints/s4-serve-qwen/01-serve-reaches-ready.md) |
+| `tools_qwen_serve_py.patch` (UTF-8 `read_text`) | **Not applied**: superseded by `PYTHONUTF8=1` in the `serve` environment (`kyojin_win.py`), which covers every `read_text()` without touching shared files | S4-01 |
 
 Apply a saved patch with `git apply doc/windows/review/patches/<name>.patch` from the repo root (re-check with `git apply --check` first; line numbers may have moved).
 

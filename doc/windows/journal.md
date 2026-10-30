@@ -46,3 +46,4 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - User will continue **in the next session**. **Next:** close the program using the GPU/RAM, `git pull`, run `check` (no `-v`), then the manual checks (`dir` for hipblas.lib/rocblas.lib; S1-04 memory snippet), hello extension (S1-02), first `build --jobs 1`.
 
 - `check` under load (other LLM on the GPU): torch probe hit `LLVM ERROR: out of memory` (not a toolchain verdict), Triton probe exposed my `python -c` bug (fixed: probes run from a file; torch probe prints `STEP` markers). Re-run `check` when the GPU/RAM are free.
+- Triton PASS on Windows/gfx1151 (vector add, triton-windows 3.9.0.post30): first positive result for the biggest unknown behind S1-03. torch GPU probe still blocked by the other workload (`HIPBLAS_STATUS_ALLOC_FAILED`); `gpu-alloc-failed` signature added.

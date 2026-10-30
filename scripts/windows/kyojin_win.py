@@ -459,8 +459,8 @@ KNOWN: tuple[Known, ...] = (
           "Close memory-heavy programs (especially anything using the GPU), then re-run; probes already cap OPENBLAS_NUM_THREADS=4, export OPENBLAS_NUM_THREADS=1 for your own runs."),
     Known("gpu-alloc-failed", r"HIPBLAS_STATUS_ALLOC_FAILED|hipErrorOutOfMemory|HIPBLAS_STATUS_NOT_INITIALIZED",
           "The GPU could not allocate (hipBLAS handle/workspace)",
-          "GPU memory is exhausted, most likely by another process using the GPU (a running LLM keeps the dedicated memory full).",
-          "Stop the other GPU workload and retry. The failed probe still records `device.mem_free_gb` in report.json: send it."),
+          "The handle allocation failed. Observed once on the target while torch reported 107.7 of 107.9 GiB GPU memory free and plain tensor allocation worked, so GPU memory exhaustion is NOT established; candidates: host RAM pressure (about 6 GB free), a hipBLAS/rocBLAS library problem, GPU contention with another process.",
+          "Read the probe's `elementwise_ms` and `matmul` per BLAS backend in report.json; retry with the other workload stopped; if elementwise works and every backend fails, check rocblas/hipblaslt DLLs next to torch."),
     Known("hip-oom", r"HIP out of memory|OutOfMemoryError",
           "GPU allocation failed",
           "The request exceeds the GPU memory Windows exposes, or memory is fragmented.",
@@ -800,12 +800,25 @@ try:
                              mem_free_gb=round(free / 2**30, 2), mem_total_gb=round(total / 2**30, 2), cus=p.multi_processor_count)
         step("randn on device")
         a = torch.randn(512, 512, dtype=torch.float16, device="cuda")
-        step("fp16 matmul (first GPU kernels: rocBLAS/hipBLASLt load, may compile)")
-        t = time.time(); (a @ a).sum().item(); torch.cuda.synchronize()
-        step("matmul done; 1 GiB allocation")
-        out["matmul_fp16_512_ms"] = round((time.time() - t) * 1000, 1)
+        step("elementwise kernel (no BLAS)")
+        t = time.time(); (a + a).sum().item(); torch.cuda.synchronize()
+        out["elementwise_ms"] = round((time.time() - t) * 1000, 1)
+        out["blas_backend_default"] = str(torch.backends.cuda.preferred_blas_library())
+        out["matmul"] = {}
+        for backend in (None, "cublas", "cublaslt"):      # None = default; the others switch hipBLAS/rocBLAS vs hipBLASLt
+            step("fp16 matmul, blas backend %s" % backend)
+            try:
+                if backend:
+                    torch.backends.cuda.preferred_blas_library(backend)
+                t = time.time(); (a @ a).sum().item(); torch.cuda.synchronize()
+                out["matmul"][str(backend)] = "ok %.1f ms" % ((time.time() - t) * 1000)
+            except BaseException as e:
+                out["matmul"][str(backend)] = "%s: %s" % (type(e).__name__, str(e)[:200])
+        step("alloc 1 GiB")
         big = torch.empty(int(2**30), dtype=torch.uint8, device="cuda"); del big
         out["alloc_1gib"] = "ok"
+        free2, _ = torch.cuda.mem_get_info(0)
+        out["device"]["mem_free_after_gb"] = round(free2 / 2**30, 2)
     step("cpp_extension info")
     from torch.utils import cpp_extension as ce
     out["cpp_extension"] = dict(ROCM_HOME=ce.ROCM_HOME, IS_HIP_EXTENSION=ce.IS_HIP_EXTENSION, IS_WINDOWS=ce.IS_WINDOWS)
@@ -943,8 +956,14 @@ def probe_torch(run: Run, env: dict[str, str] | None = None) -> Check:
     arch = str(dev.get("arch", "")).split(":")[0]
     if arch != GFX:
         return Check("torch_gpu", WARN, f"device arch {arch!r}, expected {GFX}", d, "this POC targets gfx1151 only")
-    return Check("torch_gpu", PASS, f"torch {d['torch']} hip {d['hip']}; {dev['name']} {arch}; {dev['total_gb']} GiB visible, "
-                 f"{dev['mem_free_gb']} GiB free; fp16 matmul {d['matmul_fp16_512_ms']} ms", d)
+    mm = d.get("matmul", {})
+    summary = (f"torch {d['torch']} hip {d['hip']}; {dev['name']} {arch}; {dev['total_gb']} GiB visible, "
+               f"{dev['mem_free_gb']} GiB free; elementwise {d.get('elementwise_ms')} ms; matmul by backend: {mm}")
+    if not any(v.startswith("ok") for v in mm.values()):
+        return Check("torch_gpu", FAIL, "no BLAS backend can run a matmul; " + summary, d,
+                     "elementwise kernels work but hipBLAS/hipBLASLt do not: see matmul errors in details; try with the other GPU workload stopped, then check rocblas/hipblaslt DLLs next to torch")
+    return Check("torch_gpu", WARN if mm.get("None", "").startswith("ok") is False else PASS, summary, d,
+                 "default BLAS backend failed but another works: set torch.backends.cuda.preferred_blas_library accordingly" if not mm.get("None", "").startswith("ok") else "")
 
 
 @_guard

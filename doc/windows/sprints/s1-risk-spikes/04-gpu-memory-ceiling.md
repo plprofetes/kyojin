@@ -36,3 +36,5 @@ No script. Paste into a Python prompt (`.venv-win\Scripts\python`); nothing is c
 **Links.** [existing torch probe output](../../../../scripts/windows/kyojin_win.py) · [expert tiering code that assumes Linux memory](../../../../exllamav3/util/memory.py) · next: [S1-05](05-model-pack-on-disk.md)
 
 Depends on: [S1-01](01-preflight-green.md)
+
+- 2026-10-30 (check report 5be57594, another LLM running on the same GPU): **[V] torch/HIP on Windows sees 107.87 GiB of GPU memory, 107.72 GiB free**, device `AMD Radeon(TM) 8060S Graphics`, `gfx1151`, 20 multiprocessors. Windows itself sees 31.6 GB of system RAM. 107.87 GiB is larger than the ~96 GB BIOS carve-out alone, so it appears to include shared system memory **[I]**. A plain `torch.randn(...)` on the device worked. Whether the free figure is trustworthy while another process uses the GPU is unknown **[?]**; the allocation sweep (kept to a single 16 GiB allocation while the other workload runs) is still to do. Python for the venv: uv-managed CPython 3.12.16.

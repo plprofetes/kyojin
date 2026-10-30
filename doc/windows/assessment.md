@@ -3,7 +3,7 @@
 Status: assessment only, no code changed. Date: 2026-10-30. Rev 2: Triton finding corrected, decisions and tooling added. Kyojin 1.8.3 vs upstream exllamav3 1.6.5.
 Target: one configuration. Windows 11 x64, Strix Halo (gfx1151), latest Adrenalin driver, Python 3.12, ROCm wheels from AMD's pip index.
 
-Deferred items and the sprint plan: [windows-deferred.md](windows-deferred.md).
+Plan, tasks and session journal: [README.md](README.md). Deferred items: [deferred.md](deferred.md).
 
 Legend: **[V]** verified from sources or the AMD wheel index this session; **[I]** inferred, needs a Windows run; **[?]** unknown.
 

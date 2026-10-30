@@ -26,3 +26,5 @@ Sprint: [Sprint 1: risk spikes (fail fast)](README.md) · ID S1-03 · priority o
 **Links.** [triton probe](../../../../scripts/windows/kyojin_win.py) · [vendored FLA kernels](../../../../exllamav3/vendor/fla) · [assessment §4.3](../../assessment.md) · next: [S1-04](04-gpu-memory-ceiling.md)
 
 Depends on: [S1-01](01-preflight-green.md)
+
+- 2026-10-30, `check` after the probe-from-file fix: **[V] the `triton` probe PASSED on the target** (triton-windows 3.9.0.post30, vector add on gfx1151, run while another LLM held the GPU). Details (compiler used, timing) not yet seen; ask for that run's `report.json`. Still open: a real Kyojin Triton kernel (step 2) and the 3.8.0.post29 comparison if needed.

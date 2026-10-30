@@ -154,6 +154,7 @@ class HelpfulErrors(unittest.TestCase):
         "network": "ConnectionResetError: Connection reset by peer",
         "compiler-oom": "LLVM ERROR: out of memory",
         "openblas-oom": "OpenBLAS error: Memory allocation still failed after 10 retries, giving up.",
+        "gpu-alloc-failed": "RuntimeError: CUDA error: HIPBLAS_STATUS_ALLOC_FAILED when calling `hipblasCreate(handle)`",
         "hip-oom": "torch.OutOfMemoryError: HIP out of memory. Tried to allocate 16.00 GiB",
         "file-locked": "PermissionError: [WinError 32] The process cannot access the file because it is being used by another process",
         "flag-leak": "clang: error: unknown argument: '-Xcompiler=/Zc:preprocessor'",

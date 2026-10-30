@@ -23,7 +23,7 @@ CUDA only. No ROCm on Windows upstream (ROCm wheels are Linux-only in `build.yml
 | Host compiler | MSVC (VS 2022 Build Tools, pinned 17.9.7 in CI). JIT path searches `ProgramFiles*\Microsoft Visual Studio\{2022,2019,2017}\...\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe` and appends to PATH | `ext.py:find_msvc`, `build.yml` |
 | Device compiler | nvcc from CUDA 12.8 / 13.2 (CI installs from NVIDIA redist zips, no installer) | `build.yml` |
 | Torch | CUDA wheel, user-installed first (`--index-url .../cu128`) | README |
-| Flags | cl: `/Ox /Zc:preprocessor /DWIN32_LEAN_AND_MEAN /DNOMINMAX`; nvcc: `-DWIN32_LEAN_AND_MEAN -DNOMINMAX -Xcompiler=/Zc:preprocessor`; no `-std` (torch adds it) | `setup.py` |
+| Flags | cl: `/Ox /Zc:preprocessor /DWIN32_LEAN_AND_MEAN /DNOMINMAX`; nvcc: `-DWIN32_LEAN_AND_MEAN -DNOMINMAX` (+ `-Xcompiler=/Zc:preprocessor` on CUDA only; clang rejects the joined form on ROCm); no `-std` (torch adds it) | `setup.py` |
 | Link | `libraries=["cublas"]` on Windows | `setup.py` |
 | Python deps | `triton-windows` (marker `platform_system == 'Windows'`); import fails without it | `pyproject.toml`, README |
 | Build | `python -m build -n --wheel`, `TORCH_CUDA_ARCH_LIST`, `EXLLAMA_EXT_COMPRESS=require` (loader limit on fat binaries, issue #413), `windows-2022` runner, pwsh, uv, sccache in front of nvcc | `build.yml` |

@@ -15,6 +15,8 @@ Why a VS shell is required even with clang-cl:
 - clang-cl needs INCLUDE/LIB for the MSVC STL, UCRT and Windows SDK [I]. clang can find VS on its own, but LIB for
   link.exe cannot be found that way.
 
+**ninja must be on PATH** (`.venv-win\Scripts`, i.e. an activated venv, as in the steps below). torch runs `ninja --version` (cpp_extension.py:2697-2704); if that fails it silently falls back to the serial distutils path, whose `-Xcompiler /EHsc` pairs break hipcc (see the `-Xcompiler` note below). `kyojin_win.py build` prepends the venv `Scripts` directory itself.
+
 Once VsDevCmd has run, **DISTUTILS_USE_SDK=1 is mandatory**. Otherwise torch stops with
 `UserWarning: It seems that the VC environment is activated but DISTUTILS_USE_SDK is not set...` (cpp_extension.py:1341-1345) [V].
 
@@ -63,7 +65,7 @@ From the ninja file torch writes (cpp_extension.py:3160-3300) [V]:
   `-fms-runtime-lib=dll` is accepted by clang-cl (Options.td fms_runtime_lib_EQ has CLOption visibility, llvm c7a69e6) [V].
 - `[2/2] C:\...\hipcc.exe -c C:\k\...\hello.hip -o ...\hello.obj -std=c++20 -Xcompiler -D__HIP_PLATFORM_AMD__=1 ... --offload-arch=gfx1151 -fno-gpu-rdc`
   The `.cu` source is hipified to `.hip` first. hipcc.exe is chosen for ROCm >= 6.4 (2433-2437). clang ignores the
-  bare `-Xcompiler` (Options.td: `def : Flag<["-"], "Xcompiler">, IgnoredGCCCompat`) [V].
+  bare `-Xcompiler` (Options.td: `def : Flag<["-"], "Xcompiler">, IgnoredGCCCompat`) [V] but not its argument: with `-Xcompiler /EHsc` the `/EHsc` becomes an input file. This is what the non-ninja fallback produced on the real run (2026-10-30). The ninja path avoids it (no `-Xcompiler` pairs for HIP) [V].
   The arch flag comes from PYTORCH_ROCM_ARCH via `_get_rocm_arch_flags` [I on exact spelling].
 - Then setuptools' link line: `"C:\...\link.exe" /nologo /INCREMENTAL:NO /LTCG /DLL /MANIFEST:EMBED,ID=2 /MANIFESTUAC:NO /LIBPATH:...\torch\lib /LIBPATH:%ROCM_HOME%\lib ... c10.lib torch.lib torch_cpu.lib torch_python.lib amdhip64.lib c10_hip.lib torch_hip.lib /EXPORT:PyInit_hello_ext ... /OUT:...\hello_ext.cp312-win_amd64.pyd`
   (libraries from CUDAExtension: 1594-1597) [I on exact flag order].

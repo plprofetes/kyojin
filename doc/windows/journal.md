@@ -61,3 +61,10 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - Added `scripts/windows/fla_standalone_test.py` (user consented): real vendored GDN chunk kernels vs a naive fp32 recurrence, no extension build needed; never run (no GPU in the authoring sandbox).
 - Hardened `setup`: exact uv-managed interpreter `3.12.16` (`KYOJIN_PY`, `--managed-python`), `--no-config` on every uv call, wheel tag derived from major.minor. The existing `.venv-win` already uses 3.12.16 managed; `setup --recreate` rebuilds it under the new rules (optional).
 - **Next session:** as in the previous entry, plus run `fla_standalone_test.py` right after `check` (S1-03).
+
+## 2026-10-30: first `build` attempts on Windows
+
+- `build` #1 failed with `[WinError 10106]` (Winsock provider) on `import asyncio` in the child. `capture_vs_env` returned the raw `cmd /c set` output (mixed-case keys), so `sdk_env` added a second `PATH` next to `Path`; now merged onto `os.environ` (`merge_env`) **[I]**; fixed in the next run, cause not separately proven.
+- `build` #2 reached the compiler and failed: `clang: error: no such file or directory: '/EHsc'` (and `/MD`, `/wd...`). Cause **[I]**: `.venv-win\Scripts` was not on PATH, torch's `ninja --version` failed and `BuildExtension` fell back to the serial distutils path, which emits `-Xcompiler <msvc flag>` pairs; clang ignores `-Xcompiler` but not its argument. Fix: `build` prepends the venv `Scripts` directory to PATH; signature `no-ninja-fallback`.
+- Docs corrected: the earlier [V] claim "clang ignores `-Xcompiler`, so torch's pairs work" (review/opus-r1-notes.md, review/hello_ext_clangcl.md) was wrong for MSVC flags; assessment §Flags no longer lists `-Xcompiler=` for ROCm. Lesson: a "[V] from source" about a flag-ignoring rule did not cover the argument after it.
+- **Next:** `git pull`; `build --clean` (watch for ninja `[n/N]` progress); send the run folder on failure.

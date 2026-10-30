@@ -9,9 +9,11 @@ Sprint: [Sprint 3: runtime kernels run](README.md) · ID S3-01 · priority order
 **Goal.** Reach the first generated token and enumerate what breaks.
 
 **Steps.**
-1. Ask for consent before adding a script; the simplest route is the user running the existing `tools/qwen/serve.py` or a short snippet. If approved, write `scripts/windows/smoke_model.py`: `Config.from_directory`, `Model`, `Cache`, `Generator`/`Job`, greedy 16 tokens; add `kyojin_win.py smoke --model`.
-2. Run with `-v`; for each distinct failure, open or extend S3-02 / S3-03 / S3-04 or add a new task file here.
-3. Keep a table in the journal: failure, root cause, fix, file.
+No new script. Use what exists and undo with `git checkout`.
+
+1. Run the real server path: `uv run scripts/windows/kyojin_win.py -v serve --model <pack dir>`; read the first failure. (This also starts [S4-01](../s4-serve-qwen/01-serve-reaches-ready.md); stop at the first generated token if you only need S3.)
+2. Alternative without the server: temporarily edit `model_dir` in [examples/generator.py](../../../../examples/generator.py) and run it with `.venv-win\Scripts\python examples\generator.py`. Undo with `git checkout examples/generator.py`; do not commit the edit.
+3. For each distinct failure, open or extend S3-02 / S3-03 / S3-04 or add a new task file here. Keep a table in the journal: failure, root cause, fix, file.
 
 **Done when.**
 - 16 tokens generated from a fixed prompt; output saved in the run folder.

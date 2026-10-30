@@ -330,6 +330,7 @@ def sdk_env(root: Path, base: dict[str, str]) -> dict[str, str]:
             env["HIP_DEVICE_LIB_PATH"] = str(cand)
             break
     env["PYTORCH_ROCM_ARCH"] = GFX
+    env["VSLANG"] = "1033"   # English MSVC/link messages so failure signatures match (the machine locale may be Polish etc.) [I]
     # torch raises "VC environment is activated but DISTUTILS_USE_SDK is not set" after VsDevCmd (cpp_extension _check_abi)
     env["DISTUTILS_USE_SDK"] = "1"
     # AMD's Windows PyTorch build uses the SDK clang-cl for host C++ (TheRock build_prod_wheels.py); link.exe stays the linker
@@ -606,44 +607,62 @@ def probe_cpu_ram(run: Run) -> Check:
     return Check("cpu_ram", SKIP, "not Windows", d)
 
 
+def parse_cim_gpus(text: str) -> list[dict]:
+    """Win32_VideoController rows from `ConvertTo-Json` output (a single object or a list); [] when unparseable."""
+    try:
+        data = json.loads(text or "null")
+    except json.JSONDecodeError:
+        return []
+    return [data] if isinstance(data, dict) else [r for r in (data or []) if isinstance(r, dict)]
+
+
+def _registry_gpu_memory() -> list[dict]:
+    """Optional enrichment: dedicated VRAM per adapter from the display-class registry key. Never raises."""
+    rows: list[dict] = []
+    try:
+        import winreg
+        base = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11cd-bfc1-08002be10318}"
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base) as root:
+            for i in range(64):
+                try:
+                    sub = winreg.EnumKey(root, i)
+                except OSError:
+                    break
+                if not sub.isdigit():
+                    continue
+                with contextlib.suppress(OSError):
+                    with winreg.OpenKey(root, sub) as k:
+                        row = {"key": sub}
+                        for val in ("DriverDesc", "DriverVersion", "DriverDate", "ProviderName"):
+                            with contextlib.suppress(OSError):
+                                row[val] = winreg.QueryValueEx(k, val)[0]
+                        with contextlib.suppress(OSError):
+                            mem = winreg.QueryValueEx(k, "HardwareInformation.qwMemorySize")[0]
+                            row["dedicated_vram_gb"] = round((int.from_bytes(mem, "little") if isinstance(mem, bytes) else mem) / 2**30, 2)
+                        if len(row) > 1:
+                            rows.append(row)
+    except OSError as e:
+        rows.append({"registry_unavailable": str(e)})
+    return rows
+
+
 @_guard
 def probe_gpu(run: Run) -> Check:
-    """Display adapters from the registry display-class key (stdlib only). PowerShell CIM output is logged as a second source."""
+    """Display adapters via PowerShell CIM (primary); registry adds dedicated VRAM when present."""
     if not is_windows():
         return Check("gpu", SKIP, "not Windows")
-    import winreg
-    adapters = []
-    base = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11cd-bfc1-08002be10318}"
-    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base) as root:
-        i = 0
-        while True:
-            try:
-                sub = winreg.EnumKey(root, i)
-            except OSError:
-                break
-            i += 1
-            if not sub.isdigit():
-                continue
-            with contextlib.suppress(OSError):
-                with winreg.OpenKey(root, sub) as k:
-                    row = {}
-                    for val in ("DriverDesc", "DriverVersion", "DriverDate", "ProviderName", "MatchingDeviceId"):
-                        with contextlib.suppress(OSError):
-                            row[val] = winreg.QueryValueEx(k, val)[0]
-                    with contextlib.suppress(OSError):
-                        mem = winreg.QueryValueEx(k, "HardwareInformation.qwMemorySize")[0]
-                        row["dedicated_vram_gb"] = round(int.from_bytes(mem, "little") / 2**30, 2) if isinstance(mem, bytes) else round(mem / 2**30, 2)
-                    if row:
-                        adapters.append(row)
     cim = run.run(["powershell", "-NoProfile", "-Command",
-                   "Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,AdapterRAM,PNPDeviceID,VideoProcessor | ConvertTo-Json"],
+                   "Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,DriverDate,AdapterRAM,PNPDeviceID,VideoProcessor | ConvertTo-Json -Compress"],
                   "gpu-cim", timeout=60, stream=False)
-    d = {"adapters": adapters, "cim_log": cim.logfile.name}
-    amd = [a for a in adapters if "AMD" in (a.get("ProviderName", "") + a.get("DriverDesc", "")) or "Radeon" in a.get("DriverDesc", "")]
+    adapters = parse_cim_gpus(cim.out)
+    d = {"adapters": adapters, "registry": _registry_gpu_memory(), "cim_log": cim.logfile.name,
+         "note": "CIM AdapterRAM is a 32-bit value (caps at 4 GB); dedicated_vram_gb from the registry is the reliable figure"}
+    amd = [a for a in adapters if "AMD" in str(a.get("Name", "")) or "Radeon" in str(a.get("Name", ""))]
     if not amd:
-        return Check("gpu", FAIL, "no AMD/Radeon display adapter found", d, "install the latest AMD Adrenalin driver; see gpu-cim log")
-    names = ", ".join(f"{a.get('DriverDesc')} (driver {a.get('DriverVersion')}, {a.get('DriverDate', '?')})" for a in amd)
-    return Check("gpu", PASS, names, d, "")
+        return Check("gpu", FAIL, "no AMD/Radeon display adapter found", d, "install the latest AMD Adrenalin driver; see the gpu-cim log")
+    names = ", ".join(f"{a.get('Name')} (driver {a.get('DriverVersion')})" for a in amd)
+    vram = [r.get("dedicated_vram_gb") for r in d["registry"] if r.get("dedicated_vram_gb")]
+    return Check("gpu", PASS, names + (f"; dedicated VRAM {vram} GB" if vram else ""), d)
 
 
 @_guard

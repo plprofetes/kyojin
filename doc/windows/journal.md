@@ -30,3 +30,9 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - `KNOWN` rebuilt from the reviewer's expected tool messages (34 signatures, 26 tests); `doctor` checks the tools/qwen symlinks; the script refuses to run from the repo `.venv`.
 - Triton pin now `triton-windows==3.9.0.post30` (fallback `3.8.0.post29`).
 - **Needs user consent:** adding `fla_standalone_test.py` (draft in `review/drafts/`). **Next:** S1-01 on the Windows machine.
+
+## 2026-10-30: first Windows run (doctor)
+
+- User ran `doctor` on the Windows machine: everything PASS except the `gpu` probe (my bug, fixed). Key facts recorded in [S1-01](sprints/s1-risk-spikes/01-preflight-green.md): VS 17.14 + SDK 10.0.28000.0, uv 0.13.6, locale is Polish, **Windows sees only 31.6 GB of the 128 GB RAM (about 96 GB presumably reserved for the GPU)**, 6.6 GB free.
+- Earlier on the same machine: a `uv run` spawn error (os error 3) because the clone was not on the port branch yet; resolved by checking out `claude/modest-rubin-p69b5g`. Symlinks fixed with Developer Mode + `core.symlinks=true`.
+- **Next:** `setup`, then `check`, manual checks (S1-01 step 5, S1-04), hello extension (S1-02), first `build --jobs 1`.

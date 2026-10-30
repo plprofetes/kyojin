@@ -48,3 +48,8 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - `check` under load (other LLM on the GPU): torch probe hit `LLVM ERROR: out of memory` (not a toolchain verdict), Triton probe exposed my `python -c` bug (fixed: probes run from a file; torch probe prints `STEP` markers). Re-run `check` when the GPU/RAM are free.
 - Triton PASS on Windows/gfx1151 (vector add, triton-windows 3.9.0.post30): first positive result for the biggest unknown behind S1-03. torch GPU probe still blocked by the other workload (`HIPBLAS_STATUS_ALLOC_FAILED`); `gpu-alloc-failed` signature added.
 - Key data: HIP sees 107.87 GiB GPU memory (107.72 free) on Windows, and the `hipblasCreate` ALLOC_FAILED happens despite that: the 'other workload exhausted GPU memory' theory is not supported. Probe extended (elementwise vs BLAS per backend); `gpu-alloc-failed` signature no longer blames the other process. **Next (can run with the other workload up):** `check` again, hello extension (S1-02, tiny compile), single 16 GiB allocation.
+
+## 2026-10-30: paused, waiting for the GPU
+
+- GPU and most RAM are held by another LLM project of the user; `mem_get_info` over-reports free VRAM on Windows. Decision: wait. Nothing else to run until the machine is free.
+- Resume with: `git pull`; stop the other workload; `check` (probe now reports the largest allocation that works and matmul per BLAS backend); `dir` for `lib\hipblas.lib`/`lib\rocblas.lib`; hello extension (S1-02); `build --jobs 1`. Send the run folders.

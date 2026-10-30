@@ -153,6 +153,7 @@ class HelpfulErrors(unittest.TestCase):
         "no-matching-dist": "No matching distribution found for torch==2.15.0a0+rocm10.1.0a20260822",
         "network": "ConnectionResetError: Connection reset by peer",
         "compiler-oom": "LLVM ERROR: out of memory",
+        "openblas-oom": "OpenBLAS error: Memory allocation still failed after 10 retries, giving up.",
         "hip-oom": "torch.OutOfMemoryError: HIP out of memory. Tried to allocate 16.00 GiB",
         "file-locked": "PermissionError: [WinError 32] The process cannot access the file because it is being used by another process",
         "flag-leak": "clang: error: unknown argument: '-Xcompiler=/Zc:preprocessor'",

@@ -227,11 +227,15 @@ class Run:
         with open(logfile, "w", encoding="utf-8") as lf:
             lf.write(f"$ {' '.join(_q(c) for c in cmd)}\n")
             assert proc.stdout is not None
+            last_hb = time.monotonic()
             for line in proc.stdout:
                 out.append(line)
                 lf.write(line)
                 if stream:
                     log.debug("    | %s", line.rstrip("\n"))
+                if time.monotonic() - last_hb >= 30:      # quiet console (no -v): one heartbeat line per 30 s, details stay in the log
+                    last_hb = time.monotonic()
+                    log.info("    ... %s still running (%.0fs, %d output lines) -> %s", name, time.monotonic() - t0, len(out), logfile.name)
             proc.stdout.close()
             code = proc.wait()
             if timer:
@@ -449,6 +453,10 @@ KNOWN: tuple[Known, ...] = (
           "Compiler ran out of memory",
           "Too many parallel hipcc jobs for the free RAM.",
           "Close other programs and re-run `build --jobs 2`."),
+    Known("openblas-oom", r"OpenBLAS error: Memory allocation still failed",
+          "numpy/OpenBLAS cannot allocate memory",
+          "Free RAM is too low for OpenBLAS's per-thread buffers (this machine shows only ~32 GB to Windows, the rest is GPU-reserved).",
+          "Close memory-heavy programs (especially anything using the GPU), then re-run; probes already cap OPENBLAS_NUM_THREADS=4, export OPENBLAS_NUM_THREADS=1 for your own runs."),
     Known("hip-oom", r"HIP out of memory|OutOfMemoryError",
           "GPU allocation failed",
           "The request exceeds the GPU memory Windows exposes, or memory is fragmented.",
@@ -616,53 +624,22 @@ def parse_cim_gpus(text: str) -> list[dict]:
     return [data] if isinstance(data, dict) else [r for r in (data or []) if isinstance(r, dict)]
 
 
-def _registry_gpu_memory() -> list[dict]:
-    """Optional enrichment: dedicated VRAM per adapter from the display-class registry key. Never raises."""
-    rows: list[dict] = []
-    try:
-        import winreg
-        base = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11cd-bfc1-08002be10318}"
-        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base) as root:
-            for i in range(64):
-                try:
-                    sub = winreg.EnumKey(root, i)
-                except OSError:
-                    break
-                if not sub.isdigit():
-                    continue
-                with contextlib.suppress(OSError):
-                    with winreg.OpenKey(root, sub) as k:
-                        row = {"key": sub}
-                        for val in ("DriverDesc", "DriverVersion", "DriverDate", "ProviderName"):
-                            with contextlib.suppress(OSError):
-                                row[val] = winreg.QueryValueEx(k, val)[0]
-                        with contextlib.suppress(OSError):
-                            mem = winreg.QueryValueEx(k, "HardwareInformation.qwMemorySize")[0]
-                            row["dedicated_vram_gb"] = round((int.from_bytes(mem, "little") if isinstance(mem, bytes) else mem) / 2**30, 2)
-                        if len(row) > 1:
-                            rows.append(row)
-    except OSError as e:
-        rows.append({"registry_unavailable": str(e)})
-    return rows
-
-
 @_guard
 def probe_gpu(run: Run) -> Check:
-    """Display adapters via PowerShell CIM (primary); registry adds dedicated VRAM when present."""
+    """Display adapters via PowerShell CIM."""
     if not is_windows():
         return Check("gpu", SKIP, "not Windows")
     cim = run.run(["powershell", "-NoProfile", "-Command",
                    "Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,DriverDate,AdapterRAM,PNPDeviceID,VideoProcessor | ConvertTo-Json -Compress"],
                   "gpu-cim", timeout=60, stream=False)
     adapters = parse_cim_gpus(cim.out)
-    d = {"adapters": adapters, "registry": _registry_gpu_memory(), "cim_log": cim.logfile.name,
-         "note": "CIM AdapterRAM is a 32-bit value (caps at 4 GB); dedicated_vram_gb from the registry is the reliable figure"}
+    d = {"adapters": adapters, "cim_log": cim.logfile.name,
+         "note": "CIM AdapterRAM is a 32-bit value (caps at 4 GB): use torch_gpu mem_get_info for real memory"}
     amd = [a for a in adapters if "AMD" in str(a.get("Name", "")) or "Radeon" in str(a.get("Name", ""))]
     if not amd:
         return Check("gpu", FAIL, "no AMD/Radeon display adapter found", d, "install the latest AMD Adrenalin driver; see the gpu-cim log")
     names = ", ".join(f"{a.get('Name')} (driver {a.get('DriverVersion')})" for a in amd)
-    vram = [r.get("dedicated_vram_gb") for r in d["registry"] if r.get("dedicated_vram_gb")]
-    return Check("gpu", PASS, names + (f"; dedicated VRAM {vram} GB" if vram else ""), d)
+    return Check("gpu", PASS, names, d)
 
 
 @_guard
@@ -868,6 +845,11 @@ print("KYOJIN_PROBE_JSON=" + json.dumps(out))
 
 def run_probe_script(run: Run, name: str, script: str, env: dict[str, str] | None = None, timeout: float = 600) -> tuple[Result, dict]:
     """Run a probe snippet in the venv interpreter (subprocess: a native crash cannot kill the orchestrator)."""
+    env = dict(os.environ if env is None else env)
+    # numpy's OpenBLAS allocates buffers per thread (32 logical CPUs here) and aborts on "Memory allocation still failed"
+    # when free RAM is low (seen on the 32 GB Windows view of the 128 GB machine): keep the probes small
+    env.setdefault("OPENBLAS_NUM_THREADS", "4")
+    env.setdefault("OMP_NUM_THREADS", "4")
     r = run.run([str(venv_python()), "-c", script], name, env=env, cwd=REPO, timeout=timeout, stream=False)
     data: dict = {"exit": describe_exit(r.code), "log": r.logfile.name}
     for line in r.out.splitlines():
@@ -1040,8 +1022,10 @@ def cmd_setup(run: Run, args) -> int:
             return run.summary()
         run.add(Check(name, PASS, f"{r.seconds:.0f}s", {"log": r.logfile.name}))
     tool = str(venv_tool("rocm-sdk"))
+    # rocm-sdk test spawns `rocm-sdk` by name (testCLIUsesDevelRootPath): the venv Scripts dir must be on PATH
+    sdk_run_env = dict(os.environ, PATH=str(VENV / "Scripts") + os.pathsep + os.environ.get("PATH", ""))
     for sub, name in ((["init"], "rocm-sdk-init"), (["test"], "rocm-sdk-test"), (["targets"], "rocm-sdk-targets")):
-        r = run.run([tool, *sub], name, timeout=1800, stream=True)
+        r = run.run([tool, *sub], name, env=sdk_run_env, timeout=1800, stream=True)
         if r.ok:
             run.add(Check(name, PASS, f"{r.seconds:.0f}s", {"log": r.logfile.name, "tail": r.tail(10)}))
         else:

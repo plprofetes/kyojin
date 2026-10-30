@@ -12,9 +12,9 @@ python scripts/windows/tasks.py next
 
 1. Start: read the latest journal entry and open the task file `tasks.py next` prints.
 2. Work the task. Failures from the Windows box arrive as run folders (`logs/windows/<timestamp>-<command>/`, especially `FAILURE.md`).
-3. Update status: `python scripts/windows/tasks.py set S1-02 active|blocked|done|dropped` (it also regenerates the tables below).
+3. Update status: edit the `- Status:` line in the task file (`todo|active|blocked|done|dropped`). `python scripts/windows/tasks.py set S1-02 done` also refreshes the generated tables below, but the script is optional.
 4. Fill the task's **Evidence** (run folders, versions, numbers) and append a [journal.md](journal.md) entry: what changed, what was learned, next step.
-5. `python scripts/windows/tasks.py check` and `python scripts/windows/test_kyojin_win.py` must pass; commit; push to the session branch.
+5. `python scripts/windows/test_kyojin_win.py` must pass; run `python scripts/windows/tasks.py sync` if the tables look stale; commit; push to the session branch.
 
 ## Ordering rule
 

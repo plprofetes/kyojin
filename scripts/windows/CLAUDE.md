@@ -11,6 +11,13 @@ Scope: everything under `scripts/windows/` and `doc/windows/`, plus the small Wi
 - POC goal: serve a small Qwen EXL3 pack with `tools/qwen/serve.py`. Linux is the product; Windows changes must not alter Linux behaviour.
 - The assistant's sandbox is Linux with no GPU and no Windows. Nothing here is verified on Windows until a run folder from the real machine says so.
 
+## Simplest solution first (read before writing anything)
+
+- Prefer the smallest thing that works: prose over tooling, an existing tool over a new script, an edit to an existing file over a new file, a few lines over a framework. `tasks.py` is already more machinery than the job needs; it stays, but it is not a precedent.
+- **New scripts, tools, subcommands, test harnesses or generators need the user's explicit consent before they are created.** Propose in one or two sentences (what it does, why prose or an existing tool will not do) and wait for a yes. This includes helpers, spike programs, one-off generators and new `kyojin_win.py` subcommands. Editing an existing script to fix a bug or extend an existing step is fine.
+- Not covered by the consent rule: documentation, task files, journal entries, and changes to existing files that the current task requires.
+- When in doubt, do less and ask. A shorter answer or a manual step the user performs is better than an automation nobody asked for.
+
 ## Expectations
 
 - **Simple, happy path first.** Make the golden path work before handling variations. No retries, fallbacks, version matrices, installers or abstractions "for later". If something is not needed for the next task, add it to [deferred.md](../../doc/windows/deferred.md) instead of building it.
@@ -37,7 +44,7 @@ Scope: everything under `scripts/windows/` and `doc/windows/`, plus the small Wi
 - **Run folders:** each `kyojin_win.py` command writes `logs/windows/<timestamp>-<command>/` (gitignored): `run.log` (DEBUG), `NN-<step>.log` per subprocess, `env.json`/`build-env.json` (secrets redacted), `report.json`, `FAILURE.md` (when something failed), `pip-freeze.txt` (after setup). Ask for that folder when debugging.
 - **Checks** return `Check(name, status, summary, details, hint)` with status `PASS/WARN/FAIL/SKIP/INFO`; probes never raise; probes that can crash natively run in a subprocess.
 - **Error catalogue:** `KNOWN` signatures in `kyojin_win.py` are hypotheses. A new real failure gets a signature plus a sample line in `test_kyojin_win.py` (`HelpfulErrors.SAMPLES`; the test enforces one sample per signature).
-- **Tasks:** one file per task under `doc/windows/sprints/s<N>-<slug>/<NN>-<slug>.md`; `NN` is the priority order (hardest first); header lines `- Status:`, `- Depends:`, `- Risk:`. Change status with `tasks.py set`, never by hand-editing generated tables. Every task has Goal, Steps, Done when, If it fails, Evidence, Links; documents cross-link with relative links (`tasks.py check` verifies them).
+- **Tasks** (kept in prose; the tracker script is optional): one file per task under `doc/windows/sprints/s<N>-<slug>/<NN>-<slug>.md`; `NN` is the priority order (hardest first); header lines `- Status:`, `- Depends:`, `- Risk:`. Editing the `- Status:` line by hand is fine; `tasks.py sync` only refreshes the tables and may be skipped. Every task has Goal, Steps, Done when, If it fails, Evidence, Links; documents cross-link with relative links (`tasks.py check` verifies them).
 - **Journal:** append one entry per session to [journal.md](../../doc/windows/journal.md); never rewrite old entries.
 - **Pins and URLs:** constants at the top of `kyojin_win.py`; the AMD index host is a single constant.
 - **Branch/commits:** work on the session branch given in the task (currently `claude/modest-rubin-p69b5g`), commit with the required trailer lines, push there. No pull request unless asked.
@@ -67,4 +74,4 @@ uv run scripts/windows/kyojin_win.py -v doctor    # then setup, build, check, se
 
 ## Definition of done for a change
 
-Tests above pass; `tasks.py check` passes; Linux behaviour of shared files is unchanged; the task's Evidence and the journal are updated; claims are marked V/I/?; sources and licences are recorded; the change is committed and pushed.
+Tests above pass (`tasks.py check` if you used the tracker); Linux behaviour of shared files is unchanged; the task's Evidence and the journal are updated; claims are marked V/I/?; sources and licences are recorded; the change is committed and pushed.

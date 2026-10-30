@@ -9,7 +9,7 @@ Sprint: [Sprint 1: risk spikes (fail fast)](README.md) · ID S1-02 · priority o
 **Goal.** Prove the compile/link/load pipeline on a 30-line extension before spending time on the 72-file build.
 
 **Steps.**
-1. Create `scripts/windows/spikes/hello_ext/`: `setup.py` (CUDAExtension), one `.cu` (trivial kernel + launcher) and one `.cpp` (host function + pybind), so both hipcc (device) and cl (host) run.
+1. **Ask for consent first (new files/subcommand, see [CLAUDE.md](../../../../scripts/windows/CLAUDE.md)); simplest option: have the user run a hand-written 30-line extension.** Create `scripts/windows/spikes/hello_ext/`: `setup.py` (CUDAExtension), one `.cu` (trivial kernel + launcher) and one `.cpp` (host function + pybind), so both hipcc (device) and cl (host) run.
 2. Add a `kyojin_win.py spike-ext` subcommand reusing `capture_vs_env` and `sdk_env` (the same environment as `build`); build into a temp dir under `logs/`.
 3. Import the `.pyd`, launch the kernel on the GPU, compare with torch.
 4. Record the exact ninja `FAILED:` command for every failure; fix env/flags; iterate.

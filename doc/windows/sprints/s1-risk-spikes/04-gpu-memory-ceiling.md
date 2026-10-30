@@ -10,7 +10,7 @@ Sprint: [Sprint 1: risk spikes (fail fast)](README.md) · ID S1-04 · priority o
 
 **Steps.**
 1. Read `torch_gpu` details: total_gb, mem_free_gb.
-2. Add an allocation sweep probe to `kyojin_win.py` (allocate 1 GiB tensors until failure, cap at physical RAM, free them); log the maximum.
+2. Simplest: a few lines the user pastes into `.venv-win\Scripts\python`; adding a probe to `kyojin_win.py` needs consent. Allocation sweep (allocate 1 GiB tensors until failure, cap at physical RAM, free them); log the maximum.
 3. Record the BIOS/Adrenalin 'Variable Graphics Memory' setting and total RAM; repeat after changing the setting if it is adjustable.
 4. Update [assessment §4.3](../../assessment.md) and the journal with the numbers.
 

@@ -51,7 +51,7 @@ AMD_INDEX = os.environ.get("KYOJIN_ROCM_INDEX", "https://rocm.nightlies.amd.com/
 PYPI_INDEX = "https://pypi.org/simple"
 ROCM_VER = os.environ.get("KYOJIN_ROCM_VER", "10.1.0a20260822")
 TORCH_VER = os.environ.get("KYOJIN_TORCH_VER", "2.15.0a0+rocm10.1.0a20260822")
-TRITON_SPEC = os.environ.get("KYOJIN_TRITON_SPEC", "triton-windows<3.9")   # Kyojin's Linux pin is triton 3.8.0
+TRITON_SPEC = os.environ.get("KYOJIN_TRITON_SPEC", "triton-windows==3.9.0.post30")   # torch 2.15 pairs with Triton 3.9 in the triton-windows README table; fallback 3.8.0.post29 (Kyojin's Linux pin is triton 3.8.0)
 GFX = "gfx1151"
 PY_VER = "3.12"
 MIN_FREE_GB = 40          # my estimate (SDK devel ~12 GB on Linux + torch + build tree); tune after the first run
@@ -330,7 +330,19 @@ def sdk_env(root: Path, base: dict[str, str]) -> dict[str, str]:
             env["HIP_DEVICE_LIB_PATH"] = str(cand)
             break
     env["PYTORCH_ROCM_ARCH"] = GFX
+    # torch raises "VC environment is activated but DISTUTILS_USE_SDK is not set" after VsDevCmd (cpp_extension _check_abi)
+    env["DISTUTILS_USE_SDK"] = "1"
+    # AMD's Windows PyTorch build uses the SDK clang-cl for host C++ (TheRock build_prod_wheels.py); link.exe stays the linker
+    clang_cl = root / "lib" / "llvm" / "bin" / "clang-cl.exe"
+    if clang_cl.is_file():
+        env.setdefault("CC", str(clang_cl))
+        env.setdefault("CXX", str(clang_cl))
+        env["HIP_CLANG_PATH"] = str(clang_cl.parent)
     env["EXL3_ROCM_SDK"] = str(root)
+    # HOME: hgemm.cu and the Python tune caches use HOME (else /tmp); UTF-8 and no ABI probe noise from torch's compiler check
+    env.setdefault("HOME", env.get("USERPROFILE", ""))
+    env.setdefault("PYTHONUTF8", "1")
+    env.setdefault("TORCH_DONT_CHECK_COMPILER_ABI", "1")
     env.setdefault("EXL3_HIP_DEFINES", DEFAULT_HIP_DEFINES)
     return env
 
@@ -356,91 +368,147 @@ class Known:
 # HYPOTHESES from how these toolchains usually fail, not yet observed on this stack. When a real failure matches
 # nothing here, add its signature after the first run (see doc/windows/deferred.md, "error catalogue").
 KNOWN: tuple[Known, ...] = (
-    Known("no-msvc", r"Microsoft Visual C\+\+ 1\d\.\d or greater is required|Unable to find vcvarsall|cl\.exe.*not (found|recognized)|'cl' is not recognized",
-          "MSVC compiler not found",
-          "Visual Studio Build Tools (C++ workload) is missing or its environment was not loaded.",
-          "Install Build Tools with the 'Desktop development with C++' workload, then run `doctor` (visual_studio must PASS)."),
-    Known("missing-win-headers", r"C1083: Cannot open include file: '(windows\.h|type_traits|stdio\.h|vcruntime\.h)'|'(windows\.h|vcruntime\.h)' file not found",
+    Known("uv-project-sync", r"Creating virtual environment at: \.venv\b",
+          "uv synced the repository project instead of running the script alone",
+          "`uv run` inside this repo installs the project (pyproject has [tool.uv] package = true), pulling CPU/CUDA torch.",
+          "Delete .venv and always run `uv run --no-project scripts/windows/kyojin_win.py ...`."),
+    Known("no-msvc", r"Microsoft Visual C\+\+ 1\d\.\d or greater is required|Unable to find vcvarsall|'cl' is not recognized|Command '\['where', 'cl'\]' returned non-zero",
+          "MSVC compiler / developer environment not found",
+          "Build Tools are missing, or the VS environment was not applied (torch runs `where cl` even when clang-cl is the host compiler).",
+          "Install Build Tools ('Desktop development with C++'), then `doctor` (visual_studio must PASS); build via this script, which applies VsDevCmd.bat."),
+    Known("distutils-use-sdk", r"VC environment is activated but DISTUTILS_USE_SDK is not set",
+          "DISTUTILS_USE_SDK not set",
+          "torch refuses to build after VsDevCmd.bat ran without DISTUTILS_USE_SDK=1.",
+          "Set DISTUTILS_USE_SDK=1 (`build` does; for manual builds `set DISTUTILS_USE_SDK=1`)."),
+    Known("missing-win-headers", r"fatal error: '(windows\.h|vcruntime\.h|type_traits|stdio\.h|stdlib\.h|cstdint|cmath|cstddef)' file not found|C1083: Cannot open include file: '(windows\.h|type_traits|stdio\.h|vcruntime\.h)'",
           "Windows SDK / MSVC headers not visible to the compiler",
           "INCLUDE/LIB are not set: the Visual Studio developer environment was not applied to this compile.",
-          "Run via this script's `build` (it applies VsDevCmd.bat). Check build-env.json for INCLUDE and LIB. Install the Windows 11 SDK component if `doctor` shows none."),
+          "Run via `build` (applies VsDevCmd.bat); check build-env.json for INCLUDE and LIB; install the Windows 11 SDK component if `doctor` lists none."),
     Known("missing-hip-headers", r"fatal error: '(hip/[^']+|hipblas/[^']+|hipsparse/[^']+|thrust/[^']+|rocblas/[^']+)' file not found",
           "ROCm SDK headers missing",
           "The rocm-sdk-devel tree is not expanded, or ROCM_HOME points at the wrong directory.",
           "Run `.venv-win\\Scripts\\rocm-sdk init`, then `doctor` (rocm_sdk details.headers must be all true)."),
-    Known("missing-import-lib", r"LNK1181: cannot open input file '?(hipblas|amdhip64|c10_hip|torch_hip|torch_python)[^']*\.lib",
-          "Import library not found at link time",
-          "The linker cannot find a .lib: torch/ROCm library directories are not on LIB, or the SDK devel tree lacks lib/.",
-          "Check build-env.json LIB; confirm `doctor` rocm_sdk root_listing has lib/. A missing hipblas.lib means the devel tree is incomplete: re-run `rocm-sdk init`."),
-    Known("device-libs", r"cannot find ROCm device library|device-libs|amdgcn[\\/]bitcode",
+    Known("no-hip-runtime", r"cannot find HIP runtime",
+          "clang cannot find the HIP runtime headers",
+          "HIP_PATH / --rocm-path points at a tree without the HIP runtime.",
+          "Set ROCM_HOME/HIP_PATH to the output of `rocm-sdk path --root` (see build-env.json)."),
+    Known("no-rocm-device-lib", r"cannot find ROCm device library",
           "ROCm device library (bitcode) not found",
           "clang cannot locate the amdgcn bitcode directory.",
-          "Check HIP_DEVICE_LIB_PATH in build-env.json; it must be <sdk>\\lib\\llvm\\amdgcn\\bitcode (or <sdk>\\amdgcn\\bitcode)."),
+          "Check HIP_DEVICE_LIB_PATH in build-env.json: <sdk>\\lib\\llvm\\amdgcn\\bitcode (or <sdk>\\amdgcn\\bitcode)."),
     Known("torch-not-rocm", r"CUDA_HOME environment variable is not set|CUDAExtension.*CUDA_HOME",
-          "torch does not see a ROCm toolchain",
-          "Either torch is not a ROCm wheel, or ROCM_HOME/HIP_PATH was not set for the build.",
-          "Run `doctor`: torch_gpu must show hip. If it does, the build env was not applied; use this script's `build`."),
+          "torch is not a ROCm build",
+          "A CPU/CUDA torch is installed (for example by a project sync); ROCm torch falls back to the SDK in site-packages.",
+          "Run `doctor`: torch_gpu must show hip. Re-run `setup --recreate`."),
     Known("build-isolation", r"No module named 'torch'|ModuleNotFoundError: No module named 'torch'",
           "build ran outside the venv (torch not importable)",
           "pip/uv built in an isolated environment without torch.",
-          "Use `build` (it passes --no-build-isolation with the venv interpreter). Do not run pip install . by hand."),
+          "Use `build` (it passes --no-build-isolation with the venv interpreter)."),
+    Known("restrict-cl", r"exl3_kernel_map\.cuh\(\d+\): error C2(146|061|143)|identifier '__restrict__'",
+          "cl.exe cannot parse __restrict__ in the HIP headers",
+          "A host .cpp (bindings.cpp via quant/exl3_kernel_map.cuh) was compiled by cl.exe.",
+          "Use clang-cl as host compiler: CC/CXX=<sdk>\\lib\\llvm\\bin\\clang-cl.exe (`build` sets it)."),
+    Known("mkdir-2arg", r"hgemm\.cu:\d+:\d+: error: (use of undeclared identifier 'mkdir'|no matching function for call to 'mkdir')",
+          "POSIX mkdir(path, mode) does not exist on Windows",
+          "hgemm.cu's tune-cache directory creation needs the _WIN32 guard.",
+          "Make sure hgemm.cu has the DTUNE_MKDIR guard (git log -- exllamav3/exllamav3_ext/hgemm.cu)."),
+    Known("unresolved-link", r"LNK2019: unresolved external symbol",
+          "Unresolved symbol at link time",
+          "A library is missing from setup.py `libraries` (Windows resolves every import at link time; Linux defers it). rocblas_*/hipblas_* names mean those import libs.",
+          "Read the symbol name in the log; confirm `lib\\rocblas.lib` / `lib\\hipblas.lib` exist (`doctor` rocm_sdk root_listing) and are in setup.py libraries."),
+    Known("missing-import-lib", r"LNK1181: cannot open input file '?([\w.-]+\.lib)",
+          "Import library not found at link time",
+          "The linker cannot find a .lib: library directories are not on LIB, or the SDK devel tree lacks it.",
+          "Check build-env.json LIB; `dir <sdk>\\lib\\<name>.lib`; re-run `rocm-sdk init` if the devel tree is incomplete."),
+    Known("missing-crt-lib", r"LNK1104: cannot open file '(msvcprt|msvcrt|kernel32|ucrt|vcruntime|python3\d+)\.lib'",
+          "MSVC/Windows SDK or Python import library not on LIB",
+          "The VS developer environment was not applied to the link step, or the Python libs directory is missing.",
+          "Build via this script (VsDevCmd.bat); for python3x.lib use the uv-managed venv (`setup --recreate`)."),
     Known("path-too-long", r"path.{0,20}too long|filename or extension is too long|Filename too long|WinError 206|LNK1104: cannot open file '[^']{240,}",
           "Windows path length limit",
           "A generated object/hipify path exceeds 260 characters (long paths disabled or repo path too deep).",
-          "Enable long paths (see `doctor` longpaths hint) or clone to a short path such as C:\\k."),
-    Known("dll-missing", r"DLL load failed while importing|WinError 126|WinError 127|0xC0000135|The specified module could not be found",
+          "Enable long paths (`doctor` longpaths hint) or use a short clone path such as C:\\k."),
+    Known("dll-missing", r"DLL load failed while importing|WinError 126|0xC0000135|The specified module could not be found",
           "A DLL could not be loaded",
-          "A dependent DLL is not on PATH: usually the ROCm SDK bin directory, the VC++ runtime, or a mismatched extension build.",
-          "Run `check` (it adds the SDK bin to PATH). If it still fails: `python -c \"import torch\"` inside .venv-win, and compare the DLL named in the log against `doctor` rocm_sdk bin_listing."),
-    Known("entrypoint", r"0xC0000139|procedure entry point .* could not be located|ENTRYPOINT_NOT_FOUND",
+          "A dependent DLL is not on the DLL search path: the ROCm SDK bin directory, the VC++ runtime, or a mismatched extension build. Python 3.8+ ignores PATH for extension dependencies.",
+          "Import torch first; run `check` (adds the SDK bin to PATH); the module named in the message is the one failing. If it persists, add os.add_dll_directory for <sdk>\\bin (task S2-02)."),
+    Known("entrypoint", r"0xC0000139|WinError 127|The specified procedure could not be found|procedure entry point .* could not be located|ENTRYPOINT_NOT_FOUND",
           "DLL version mismatch",
           "An extension built against one torch/ROCm version is loading with another.",
-          "Rebuild: `build --clean`. Do not mix wheels from different index dates (compare pip-freeze.txt)."),
-    Known("no-matching-dist", r"No matching distribution found|Could not find a version that satisfies|no version of torch|not found in the package registry|is not available on",
+          "Rebuild: `build --clean`. Compare pip-freeze.txt; never mix wheels from different index dates."),
+    Known("no-matching-dist", r"No matching distribution found|Could not find a version that satisfies|there is no version of|not found in the package registry|is not available on",
           "A pinned package version is not on the index",
           "The AMD nightly was pruned or the pin does not exist for this Python.",
           "Run `doctor` (amd_index lists the wheels found). Pick an existing version and set KYOJIN_TORCH_VER / KYOJIN_ROCM_VER."),
     Known("network", r"Connection (reset|aborted|refused)|timed out|TimeoutError|SSL(Error|: CERTIFICATE)|Temporary failure in name resolution|getaddrinfo failed|Failed to download",
           "Network failure",
           "A download from the package index failed (proxy, VPN, firewall or transient).",
-          "Retry. Behind a corporate proxy set HTTPS_PROXY and SSL_CERT_FILE. `doctor` amd_index tests reachability."),
-    Known("oom", r"std::bad_alloc|LLVM ERROR: out of memory|out of memory|C1060|compiler is out of heap space|clang: error: unable to execute command: (Killed|Segmentation)|fatal error C1002",
+          "Retry. Behind a proxy set HTTPS_PROXY and SSL_CERT_FILE. `doctor` amd_index tests reachability."),
+    Known("compiler-oom", r"std::bad_alloc|LLVM ERROR: out of memory|C1060|compiler is out of heap space|unable to execute command: (Killed|Segmentation)|fatal error C1002",
           "Compiler ran out of memory",
           "Too many parallel hipcc jobs for the free RAM.",
-          "Close other programs and re-run `build --jobs 2` (see cpu_ram in the build log for free RAM)."),
+          "Close other programs and re-run `build --jobs 2`."),
+    Known("hip-oom", r"HIP out of memory|OutOfMemoryError",
+          "GPU allocation failed",
+          "The request exceeds the GPU memory Windows exposes, or memory is fragmented.",
+          "Record torch.cuda.mem_get_info() (task S1-04); use a smaller model/context."),
     Known("file-locked", r"PermissionError: \[WinError (5|32)\]|Access is denied|being used by another process",
           "File locked or access denied",
           "Another process (a running python, an editor, antivirus) holds a file in the repo or .venv-win.",
-          "Stop python.exe processes started from this repo, close editors on it, add the repo and .venv-win to antivirus exclusions, retry."),
-    Known("flag-leak", r"unknown argument:? '?-X(compiler|cudafe)|unknown argument: '-Xcompiler|clang: error: unknown argument",
-          "An nvcc-only flag reached hipcc",
-          "setup.py passed a CUDA/nvcc option into the HIP compile.",
-          "Look at the failing command in the log (ninja prints it after FAILED:) and gate that flag in setup.py for torch.version.hip."),
-    Known("msvc-flag-on-clang", r"cl : Command line (warning|error) D9002|D8021|D8004",
-          "A GCC/clang flag reached cl.exe",
-          "setup.py passed a non-MSVC option to the host C++ compiler.",
-          "Gate that flag in setup.py for Windows (see how -Wno-register is gated)."),
-    Known("python-h", r"Cannot open include file: 'Python\.h'|Python\.h: No such file",
+          "Stop python.exe processes from this repo, close editors, add the repo and .venv-win to Defender exclusions, retry."),
+    Known("flag-leak", r"clang(\.exe)?: error: unknown argument:? '([^']+)'",
+          "A flag unknown to clang reached hipcc/clang-cl",
+          "setup.py (or the JIT path in ext.py) passed an nvcc-only or MSVC-only option.",
+          "Read the flag in the message, find the failing command after `FAILED:` in the log, and gate that flag in setup.py for torch.version.hip."),
+    Known("python-h", r"fatal error: 'Python\.h' file not found|Cannot open include file: 'Python\.h'",
           "Python headers missing",
-          "The venv interpreter has no include/ directory (non-uv Python or Microsoft Store Python).",
+          "The venv interpreter has no include/ directory (non-uv or Microsoft Store Python).",
           "Recreate the venv: `setup --recreate` (uv installs a full CPython 3.12)."),
+    Known("ext-not-built", r"exllamav3_ext is not built\. On Windows with ROCm",
+          "exllamav3 imported before the extension was built",
+          "On Windows+ROCm the JIT build is disabled (it cannot succeed); the .pyd must be built first.",
+          "Run `build`. Do not import exllamav3 (or its kernels) before it succeeds."),
     Known("invalid-device-function", r"invalid device function|hipErrorNoBinaryForGpu|no kernel image is available",
           "GPU code object does not match this GPU",
           "The extension or a JIT kernel was compiled for a different architecture than the installed GPU.",
           "Confirm `doctor` torch_gpu arch is gfx1151, then `build --clean`. PYTORCH_ROCM_ARCH must be gfx1151."),
-    Known("triton-compiler", r"Failed to find C compiler|clang-cl.*(not found|No such)|Please specify one with the CC|CalledProcessError.*(clang-cl|cl\.exe)",
-          "Triton cannot find a C compiler for its launcher stub",
-          "triton-windows could not find clang-cl (from the ROCm SDK wheel) or MSVC cl.exe.",
-          "Run Triton checks through `check` (applies SDK PATH). Otherwise put <sdk>\\lib\\llvm\\bin on PATH or set CC to clang-cl.exe."),
+    Known("tdr", r"HIP error: (unspecified launch failure|.*device.*lost|the launch timed out)",
+          "GPU watchdog (TDR) reset or device lost",
+          "A long GPU kernel exceeded Windows' ~2 s TDR limit and the driver reset the device.",
+          "Check Event Viewer > System > Display, event 4101; see doc/windows/review/tdr.md for TdrDelay values; try EXL3_PREFILL_CHUNK=1024."),
+    Known("triton-hip-dll", r"cannot locate amdhip64\.dll after attempted paths",
+          "Triton cannot find the HIP runtime DLL",
+          "The ROCm SDK core wheel is not importable or torch was not imported first.",
+          "Import torch before triton; `doctor` rocm_sdk must PASS; set TRITON_LIBHIP_PATH to <sdk>\\bin\\amdhip64_7.dll if needed."),
+    Known("triton-cc-fail", r"Failed to compile\. cc_cmd:",
+          "Triton's C stub compile failed",
+          "clang-cl (from the ROCm SDK wheel) failed, usually because INCLUDE/LIB (Windows SDK) are not set.",
+          "Run Triton through `check`/`build` environments (VS environment applied) and read the cc_cmd output in the log."),
+    Known("triton-import-order", r"DLL load failed while importing libtriton",
+          "triton imported before torch",
+          "TheRock ROCm requires importing torch before triton (triton-windows commits e520c2e3 / 602b6073).",
+          "`import torch` first in any script that imports triton."),
     Known("no-triton", r"No module named 'triton'",
           "triton-windows not installed",
           "setup did not complete, or the wrong interpreter ran.",
-          "Run `setup`; verify `.venv-win\\Scripts\\python -c \"import triton\"`."),
+          "Run `setup`; verify `.venv-win\\Scripts\\python -c \"import torch, triton\"`."),
+    Known("symlink-checkout", r"tools[\\/]qwen[\\/](image_cache|serve_metrics|serve_ping|serve_reqlog)\.py\", line 1",
+          "git symlinks were checked out as text files",
+          "Git for Windows defaults to core.symlinks=false; tools/qwen/*.py are symlinks.",
+          "Enable Developer Mode and re-clone with `git clone -c core.symlinks=true` (`doctor` symlinks check)."),
+    Known("register-at-fork", r"module 'os' has no attribute 'register_at_fork'",
+          "POSIX-only os.register_at_fork",
+          "tools/startup_health.py calls it unconditionally (patch saved in doc/windows/review/patches).",
+          "Apply doc/windows/review/patches/tools_startup_health_py.patch (task S4-01)."),
+    Known("hip-lib-windows", r"no libamdhip64\.so or libamdhip64\.so\.<version>",
+          "util/hip_lib.py looks for the Linux library name",
+          "A JIT HIP kernel (GDN/PLE/DQ/GR under serve.py) loaded the runtime through the Linux-only lookup.",
+          "Apply doc/windows/review/patches/hip_lib_windows.patch (task S3-02), or set EXL3_GDN_FUSE=0 EXL3_GDN_HF=0 to avoid the JIT path first."),
 )
 
 ERROR_LINE = re.compile(r"(?i)(\berror\b|\bfatal\b|FAILED:|Traceback \(most recent|\bLNK\d{4}\b|\bC\d{4}:|cannot open|no such file|"
                         r"undefined (symbol|reference)|unresolved external|not found|Segmentation|access violation)")
-ERROR_NOISE = re.compile(r"(?i)(\b0 errors?\b|-Werror|-Wno-error|error_code|warning:|errors?[- ]handling|stderr)")
+ERROR_NOISE = re.compile(r"(?i)(\b0 errors?\b|-Werror|-Wno-error|error_code|warning:|errors?[- ]handling|stderr|Error checking compiler version|argument unused during compilation)")
 
 
 def diagnose(text: str) -> list[Known]:
@@ -576,6 +644,23 @@ def probe_gpu(run: Run) -> Check:
         return Check("gpu", FAIL, "no AMD/Radeon display adapter found", d, "install the latest AMD Adrenalin driver; see gpu-cim log")
     names = ", ".join(f"{a.get('DriverDesc')} (driver {a.get('DriverVersion')}, {a.get('DriverDate', '?')})" for a in amd)
     return Check("gpu", PASS, names, d, "")
+
+
+@_guard
+def probe_symlinks(run: Run) -> Check:
+    """tools/qwen/*.py are git symlinks; Git for Windows (core.symlinks=false) checks them out as one-line text files."""
+    names = ("image_cache", "serve_metrics", "serve_ping", "serve_reqlog")
+    bad = []
+    for n in names:
+        p = REPO / "tools" / "qwen" / f"{n}.py"
+        if p.is_file() and not p.is_symlink() and p.stat().st_size < 200 and p.read_text(errors="replace").strip().startswith(".."):
+            bad.append(p.name)
+    cfg = subprocess.run(["git", "-C", str(REPO), "config", "core.symlinks"], capture_output=True, text=True).stdout.strip()
+    d = {"core.symlinks": cfg or "(unset)", "broken": bad}
+    if bad:
+        return Check("symlinks", FAIL, f"{len(bad)} symlinked files are plain text: {', '.join(bad)}", d,
+                     "enable Developer Mode, then re-clone: git clone -c core.symlinks=true <repo> C:\\k")
+    return Check("symlinks", PASS, "tools/qwen symlinks intact", d)
 
 
 @_guard
@@ -880,6 +965,7 @@ def host_probes(run: Run):
     run.add(probe_cpu_ram(run))
     run.add(probe_gpu(run))
     run.add(probe_disk(run))
+    run.add(probe_symlinks(run))
     run.add(probe_longpaths(run))
     run.add(probe_tool(run, "git", ["--version"], "winget install Git.Git"))
     run.add(probe_tool(run, "uv", ["--version"], "winget install astral-sh.uv   (then open a new terminal)"))
@@ -979,9 +1065,20 @@ def cmd_build(run: Run, args) -> int:
         for p in (REPO / "build", *REPO.glob("exllamav3_ext*.pyd")):
             log.info("clean: removing %s", p)
             shutil.rmtree(p, ignore_errors=True) if p.is_dir() else p.unlink(missing_ok=True)
-    uv = shutil.which("uv") or "uv"
-    cmd = [uv, "pip", "install", "--python", str(venv_python()), "--no-build-isolation", "--no-deps", "-v", "-e", str(REPO)]
+    # setup.py build_ext --inplace (not pip -e): leaves build\\temp.*\\Release\\build.ninja in place for the ninja -k 0 pass below
+    cmd = [str(venv_python()), "setup.py", "build_ext", "--inplace", "-v"]
     r = run.run(cmd, "build-extension", env=env, cwd=REPO, timeout=4 * 3600, stream=True)
+    if not r.ok:
+        # first failure stops ninja; rerun with -k 0 so ONE round trip returns every compile error (link errors come later)
+        nj = next(iter(sorted(REPO.glob("build/temp.*/**/build.ninja"))), None)
+        if nj:
+            r2 = run.run([str(venv_tool("ninja")), "-k", "0", "-j", str(jobs)], "ninja-keep-going", env=env, cwd=nj.parent,
+                         timeout=4 * 3600, stream=True)
+            failed = [ln for ln in r2.out.splitlines() if ln.startswith("FAILED:")]
+            (run.dir / "ninja-failed.txt").write_text("\n".join(failed) + "\n", encoding="utf-8")
+            log.error("ninja -k 0: %d failed compile edge(s), listed in ninja-failed.txt", len(failed))
+            if failed:
+                r = r2
     pyds = sorted(p.name for p in REPO.glob("exllamav3_ext*.pyd"))
     if r.ok and not pyds:
         run.add(Check("build", FAIL, "install succeeded but no exllamav3_ext*.pyd was produced", {"log": r.logfile.name},
@@ -1045,6 +1142,10 @@ def main(argv: list[str] | None = None) -> int:
     sv.add_argument("--port", type=int, default=8000)
     sv.add_argument("--ctx", type=int, default=8192)
     args = ap.parse_args(argv)
+    if Path(sys.prefix).resolve() == (REPO / ".venv").resolve():
+        print("kyojin_win is running inside the repository's .venv: `uv run` synced the project (pulls CPU/CUDA torch).\n"
+              "Delete .venv and run: uv run --no-project scripts/windows/kyojin_win.py " + " ".join(argv or sys.argv[1:]), file=sys.stderr)
+        return 2
     run = Run(args.cmd, args.verbose)
     try:
         return {"doctor": cmd_doctor, "setup": cmd_setup, "build": cmd_build, "check": cmd_check, "serve": cmd_serve}[args.cmd](run, args)

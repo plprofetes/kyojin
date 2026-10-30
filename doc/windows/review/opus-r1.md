@@ -32,7 +32,7 @@ Fresh-eyes review of [assessment.md](../assessment.md), the sprint plan and the 
 ## Alternatives the reviewer ranked
 
 1. Native build with `clang-cl` as host compiler (adopted as primary path).
-2. WSL2 + ROCDXG, supported by AMD for Strix Halo with Adrenalin 26.2.2 + ROCm 7.2.1 per AMD's WSL guide; the reviewer is about 60% confident it would work for Kyojin. A one-hour fallback test, not a replacement (the user wants native Windows).
+2. WSL2 + ROCDXG, supported by AMD for Strix Halo with Adrenalin 26.2.2 + ROCm 7.2.1 per AMD's WSL guide; the reviewer is about 60% confident it would work for Kyojin. **Decision (user): not a path.** WSL2 builds Linux binaries, so it cannot produce a Windows build, and its GPU access goes through a busy-polling driver bridge, so its performance is not representative of native Windows, which is the goal. At most a diagnostic: it can show whether a failure is Windows-specific or already present on this torch/ROCm version.
 3. AMD HIP SDK installer: version mismatch with pip ROCm 10.1 likely; low value.
 4. Prebuilt wheels only after a build works.
 

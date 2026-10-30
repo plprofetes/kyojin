@@ -9,7 +9,7 @@ Sprint: [Sprint 1: risk spikes (fail fast)](README.md) · ID S1-05 · priority o
 **Goal.** Have a small EXL3 pack plus the files `tools/qwen/serve.py` needs.
 
 **Steps.**
-1. Confirm `turboderp/Qwen3.5-9B-exl3` exists and pick the ~4.0 bpw branch (turboderp repos use one branch per bitrate); `hf download turboderp/Qwen3.5-9B-exl3 --revision 4.0bpw --local-dir C:\models\qwen35-9b-4bpw` (branch name to confirm).
+1. Confirm `turboderp/Qwen3.5-9B-exl3` exists and pick the ~4.0 bpw branch (turboderp repos use one branch per bitrate); `hf download turboderp/Qwen3.5-9B-exl3 --revision 4.00bpw --local-dir C:\models\qwen35-9b-4bpw` (branch name to confirm).
 2. Ensure `chat_template.jinja` and `generation_config.json` are in the folder; copy them from the base `Qwen/Qwen3.5-9B` repo if absent.
 3. `kyojin_win.py serve --model <dir>` prints the `model_dir` check; it should PASS.
 4. Record the exact repo, branch, size and file list in the journal.

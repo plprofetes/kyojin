@@ -9,10 +9,49 @@ Sprint: [Sprint 1: risk spikes (fail fast)](README.md) · ID S1-02 · priority o
 **Goal.** Prove the compile/link/load pipeline on a 30-line extension before spending time on the 72-file build.
 
 **Steps.**
-1. **Ask for consent first (new files/subcommand, see [CLAUDE.md](../../../../scripts/windows/CLAUDE.md)); simplest option: have the user run a hand-written 30-line extension.** Create `scripts/windows/spikes/hello_ext/`: `setup.py` (CUDAExtension), one `.cu` (trivial kernel + launcher) and one `.cpp` (host function + pybind), so both hipcc (device) and cl (host) run.
-2. Add a `kyojin_win.py spike-ext` subcommand reusing `capture_vs_env` and `sdk_env` (the same environment as `build`); build into a temp dir under `logs/`.
-3. Import the `.pyd`, launch the kernel on the GPU, compare with torch.
-4. Record the exact ninja `FAILED:` command for every failure; fix env/flags; iterate.
+No new repo files or scripts. Everything lives in the gitignored scratch folder `logs\windows\scratch\hello_ext` (cleanup: delete `logs\windows\scratch`).
+
+1. Open a VS developer shell (`"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"` finds the install; run its `Common7\Tools\VsDevCmd.bat -arch=amd64`, or use "x64 Native Tools Command Prompt"). From the repo root:
+   ```bat
+   .venv-win\Scripts\activate
+   for /f "delims=" %i in ('rocm-sdk path --root') do set ROCM_HOME=%i
+   set ROCM_PATH=%ROCM_HOME%
+   set HIP_PATH=%ROCM_HOME%
+   set PATH=%ROCM_HOME%\bin;%ROCM_HOME%\lib\llvm\bin;%PATH%
+   set PYTORCH_ROCM_ARCH=gfx1151
+   mkdir logs\windows\scratch\hello_ext & cd logs\windows\scratch\hello_ext
+   ```
+2. Create three files in that folder (a trivial extension that exercises both hipcc for the `.cu` and `cl.exe` for the `.cpp`):
+   - `hello.cu`
+     ```cpp
+     #include <torch/extension.h>
+     #include <ATen/cuda/CUDAContext.h>
+     __global__ void add1_kernel(float* x, int n) { int i = blockIdx.x * blockDim.x + threadIdx.x; if (i < n) x[i] += 1.0f; }
+     void add1_cuda(torch::Tensor x) {
+         int n = x.numel();
+         add1_kernel<<<(n + 255) / 256, 256, 0, at::cuda::getCurrentCUDAStream()>>>(x.data_ptr<float>(), n);
+     }
+     ```
+   - `hello.cpp`
+     ```cpp
+     #include <torch/extension.h>
+     void add1_cuda(torch::Tensor x);
+     void add1(torch::Tensor x) { TORCH_CHECK(x.is_cuda() && x.dtype() == torch::kFloat32, "float32 cuda tensor"); add1_cuda(x); }
+     PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) { m.def("add1", &add1); }
+     ```
+   - `setup.py`
+     ```python
+     from setuptools import setup
+     from torch.utils.cpp_extension import CUDAExtension, BuildExtension
+     setup(name="hello_ext", ext_modules=[CUDAExtension("hello_ext", ["hello.cpp", "hello.cu"])], cmdclass={"build_ext": BuildExtension})
+     ```
+3. Build and test:
+   ```bat
+   python setup.py build_ext --inplace -v > build.log 2>&1
+   python -c "import torch, hello_ext; x = torch.zeros(1000, device='cuda'); hello_ext.add1(x); print(x.sum().item())"
+   ```
+   Expected output `1000.0`.
+4. On failure send `build.log`, or at least the first `FAILED:` block (ninja prints the exact failing command) and the first error line. Record each fix (env var, flag) in the journal; these become the `build` step's environment.
 
 **Done when.**
 - `.pyd` builds, imports, kernel output equals the torch reference; run folder saved.

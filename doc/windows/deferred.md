@@ -1,6 +1,6 @@
-# Windows port: deferred items and sprint plan
+# Windows port: deferred items and error catalogue
 
-Companion to [windows-port-assessment.md](windows-port-assessment.md). Target: Windows 11 x64, Strix Halo (gfx1151), Python 3.12, ROCm/torch from AMD's nightly index, `uv`-managed venv `.venv-win`. Goal: **serve a Qwen model through `tools/qwen/serve.py` on Windows.**
+Part of the [Windows port docs](README.md); background in [assessment.md](assessment.md); plan in [sprints](sprints/). Target: Windows 11 x64, Strix Halo (gfx1151), Python 3.12, ROCm/torch from AMD's nightly index, `uv`-managed venv `.venv-win`. Goal: **serve a Qwen model through `tools/qwen/serve.py` on Windows.** Revisit triggers refer to sprints (`S3` = [sprints/s3-runtime-kernels](sprints/s3-runtime-kernels/README.md), etc.).
 
 Rules for this file: an item moves out of "Deferred" only when a sprint needs it. Every deferral says why and what would trigger it. Update this file in the same commit that changes the status.
 
@@ -56,43 +56,4 @@ Every failing step prints and saves (`FAILURE.md` in the run's log folder): comm
 Process after each real failure:
 1. Open `FAILURE.md`. If "no known signature matched": add a `Known(...)` entry (regex from the real first-error line, cause, concrete fix) and a sample line in `test_kyojin_win.py::HelpfulErrors.SAMPLES`.
 2. If a signature matched but the advice was wrong, fix the advice, not just the code.
-3. Record the failure and fix in the log table in section 4.
-
-## 3. Sprint plan: serve a Qwen model on Windows
-
-Effort is dominated by rebuild time (10+ minutes per iteration on Linux, expect more) and by how many unknowns a sprint hits; no calendar estimates. Each sprint ends with evidence: the log folders from the passing run, listed in section 4.
-
-**Sprint 0 (done): assess and tooling.** Assessment, `kyojin_win.py` (`doctor/setup/build/check/serve`), `setup.py` Windows+HIP flags, 25 unit tests on Linux. Evidence: commits on `claude/modest-rubin-p69b5g`.
-
-**Sprint 1: toolchain green.** `doctor` and `setup` pass on the target machine.
-- Exit: `doctor` has no FAIL; `torch_gpu` shows `gfx1151` and the visible GPU memory; `triton` vector-add passes; `rocm_sdk` shows `hipcc.exe` and all headers.
-- Work: fix whatever the first runs expose (index URL, VS discovery, `rocm-sdk init`, driver). Record the GPU-addressable memory figure (answers the Windows memory-ceiling question **[?]**).
-- Gate: if Triton fails on gfx1151, stop and decide between a triton-windows fix, a different pin (`<3.10`), or dropping to torch fallbacks. Do not proceed to Sprint 2 without a decision.
-
-**Sprint 2: extension builds and imports.** `build` produces `exllamav3_ext*.pyd`.
-- Exit: `check` shows `extension` PASS (imports; symbols present).
-- Work: setuptools/torch/hipcc issues (flags, link libs, include paths, MSVC interplay). Expect `setup.py` and possibly `build_config.py` edits; keep each guarded for Windows so Linux builds are unchanged. Verify `moe_mul1.cpp` compiles under `cl.exe`.
-- Gate: Linux build must still pass after every `setup.py` edit (run on a Linux box or CI before merging).
-
-**Sprint 3: runtime kernels run.** A tiny forward pass produces correct numbers.
-- Exit: `tests/test_hip_gemv_decode.py` (with `EXL3_TEST_MODEL` set to a small pack) passes, or an equivalent minimal script: model loads, one prefill, one decode step, logits match the Linux reference within tolerance.
-- Work: `util/hip_lib.py` and `util/hip_compiler.py` Windows support; JIT `.hsaco` kernels (`hipModuleLoad` via the Windows DLL); Triton FLA/GDN kernels on triton-windows; `~/.cache` paths.
-- Gate: numeric mismatch vs Linux means stop and bisect per kernel before continuing.
-
-**Sprint 4: serve a small Qwen.** `tools/qwen/serve.py` answers `/v1/chat/completions`.
-- Exit: `kyojin_win.py serve --model <small pack>` prints `READY`, `curl` completion returns coherent text, greedy output matches the Linux run for a fixed prompt (or documented tolerance), 10 sequential requests without crash.
-- Work: guard Linux-only metrics/memory code in the server path (`util/memory.py`, startup swap-in, `/sys` reads); pack requirements (`chat_template.jinja`, `generation_config.json`); first-launch kernel tuning time.
-- Model: `turboderp/Qwen3.5-9B-exl3` at about 4 bpw is the first candidate **[?]** (repo not yet confirmed from a network that reaches Hugging Face).
-
-**Sprint 5: harden and publish the path.**
-- Exit: a second clean machine (or fresh user profile) goes from nothing to serving with the documented commands; `pip-freeze.txt` pinned into a Windows requirements/lock file; `docs/install-windows.md` written; CI `windows_rocm_smoke` compiles on a hosted runner (or documented why not).
-- Work: pin versions, trim the error catalogue to real signatures, add the CI job, decide the stable-wheel fallback.
-
-**Sprint 6: scale and speed (separate decision).**
-- Candidates: 27B-class dense, Qwen3.8-Flash-Next (needs the memory ceiling answer and real Windows equivalents for the memory-accounting code), speculative decoding, perf comparison with Linux, DS41 only on demand.
-
-## 4. Evidence log (fill as sprints run)
-
-| Date | Sprint | Command | Result | Log folder | Notes / fix |
-|---|---|---|---|---|---|
-| | 1 | `doctor` | | | |
+3. Record the failure and fix in [journal.md](journal.md).

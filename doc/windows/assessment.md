@@ -184,7 +184,7 @@ Verification status: AMD index contents and the torch wheel `METADATA` were read
 | triton-windows | exact pin `==3.9.0.post30` (commit `26a4654c`, released 28 Oct; torch 2.15 pairs with Triton 3.9 in its README table); fallback `==3.8.0.post29` (`143426c4`); Linux Kyojin pin is triton `3.8.0` | PyPI, github.com/triton-lang/triton-windows releases |
 | TheRock docs read | `main` branch RELEASES.md on 2026-10-30; commit SHA not captured | github.com/ROCm/TheRock |
 | uv | any recent; version is logged in each run (`uv --version` probe) | |
-| Python | 3.12 (uv-managed) | |
+| Python | exact `3.12.16`, uv-managed (`--managed-python`, `--no-config`); override with `KYOJIN_PY` | first Windows `setup` resolved 3.12.16 |
 
 Pins live in `scripts/windows/kyojin_win.py` (`ROCM_VER`, `TORCH_VER`, `TRITON_SPEC`). After the first good `setup`, replace the open ranges (`triton-windows<3.9`, unpinned PyPI requirements) with exact versions from that run's `pip-freeze.txt` (task S5-03; do it earlier if a run is worth reproducing).
 

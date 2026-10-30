@@ -5,7 +5,7 @@ Scope: everything under `scripts/windows/` and `doc/windows/`, plus the small Wi
 ## Assumptions (one target, do not widen)
 
 - Windows 11 x64, AMD Strix Halo (gfx1151), latest Adrenalin driver, 128 GB machine, Python 3.12.
-- Everything lives in a `uv`-managed venv `.venv-win` in the repo; nothing is installed into the system Python or PATH.
+- Everything lives in a `uv`-managed venv `.venv-win` in the repo; nothing is installed into the system Python or PATH. Hardened: the interpreter is an exact uv-managed CPython (`KYOJIN_PY`, currently 3.12.16, `--managed-python`, never a system Python) and every uv call uses `--no-config` (ignores user/system uv.toml).
 - ROCm torch, `rocm-sdk` and `triton-windows` come from AMD's nightly index and PyPI, pinned in one place (`kyojin_win.py` constants, env overrides `KYOJIN_*`).
 - Build chain: MSVC (`cl.exe`) for host C++, `hipcc.exe` for device code, driven by setuptools + torch `BuildExtension` + ninja. No CMake, no new build system.
 - Native Windows only: both the build and the performance target are native Windows. WSL2 and dual boot are not goals (WSL2 yields Linux binaries and a busy-polling GPU bridge); use them only as diagnostics if the user asks.
@@ -58,6 +58,7 @@ Scope: everything under `scripts/windows/` and `doc/windows/`, plus the small Wi
 | Orchestrator (`doctor/setup/build/check/serve`) | `scripts/windows/kyojin_win.py` |
 | Orchestrator tests (stdlib unittest, no GPU) | `scripts/windows/test_kyojin_win.py`, `scripts/windows/test_tasks.py` |
 | Task tracker | `scripts/windows/tasks.py` |
+| Standalone Triton/GDN kernel test (needs GPU, no extension build; added with user consent) | `scripts/windows/fla_standalone_test.py` |
 | Docs index, assessment, deferred items, journal | `doc/windows/README.md`, `assessment.md`, `deferred.md`, `journal.md` |
 | Sprints and tasks | `doc/windows/sprints/` |
 | Windows-gated build flags | `setup.py` (repo root) |

@@ -9,10 +9,20 @@ Sprint: [Sprint 1: risk spikes (fail fast)](README.md) · ID S1-04 · priority o
 **Goal.** Know how many GiB torch can actually allocate on the GPU, with the current BIOS/Adrenalin graphics-memory setting.
 
 **Steps.**
-1. Read `torch_gpu` details: total_gb, mem_free_gb.
-2. Simplest: a few lines the user pastes into `.venv-win\Scripts\python`; adding a probe to `kyojin_win.py` needs consent. Allocation sweep (allocate 1 GiB tensors until failure, cap at physical RAM, free them); log the maximum.
-3. Record the BIOS/Adrenalin 'Variable Graphics Memory' setting and total RAM; repeat after changing the setting if it is adjustable.
-4. Update [assessment §4.3](../../assessment.md) and the journal with the numbers.
+No script. Paste into a Python prompt (`.venv-win\Scripts\python`); nothing is created.
+
+1. Visible memory and a 1 GiB allocation sweep (stops at 200 GiB or the first failure; close other programs first):
+   ```python
+   import torch
+   f, t = torch.cuda.mem_get_info(); print("free/total GiB", f / 2**30, t / 2**30)
+   xs = []
+   try:
+       while len(xs) < 200: xs.append(torch.empty(2**30, dtype=torch.uint8, device="cuda"))
+   except Exception as e: print(type(e).__name__, e)
+   print("allocated GiB", len(xs)); del xs
+   ```
+2. Note total RAM, the BIOS/Adrenalin "Variable Graphics Memory" setting and the driver version. If the setting can be changed, repeat after changing it.
+3. Put the numbers in the journal and update [assessment §4.3](../../assessment.md).
 
 **Done when.**
 - A number (GiB) for max single allocation and max total, with the settings used.
@@ -23,6 +33,6 @@ Sprint: [Sprint 1: risk spikes (fail fast)](README.md) · ID S1-04 · priority o
 
 - 
 
-**Links.** [torch probe](../../../../scripts/windows/kyojin_win.py) · [expert tiering code that assumes Linux memory](../../../../exllamav3/util/memory.py) · next: [S1-05](05-model-pack-on-disk.md)
+**Links.** [existing torch probe output](../../../../scripts/windows/kyojin_win.py) · [expert tiering code that assumes Linux memory](../../../../exllamav3/util/memory.py) · next: [S1-05](05-model-pack-on-disk.md)
 
 Depends on: [S1-01](01-preflight-green.md)

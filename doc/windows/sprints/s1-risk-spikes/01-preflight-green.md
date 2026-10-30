@@ -9,11 +9,12 @@ Sprint: [Sprint 1: risk spikes (fail fast)](README.md) · ID S1-01 · priority o
 **Goal.** Get `doctor` to no FAIL and `setup` to completion on the Windows 11 / gfx1151 machine.
 
 **Steps.**
-1. Install `uv` (`winget install astral-sh.uv`), clone, `git checkout claude/modest-rubin-p69b5g`.
-2. `uv run scripts/windows/kyojin_win.py -v doctor`; fix each FAIL using its printed hint.
-3. `uv run scripts/windows/kyojin_win.py -v setup`.
+1. Install `uv` (`winget install astral-sh.uv`). Enable Developer Mode (symlinks: 15 repo files, 4 in `tools/qwen`, are git symlinks). Clone to a short path without spaces: `git clone -c core.symlinks=true <repo> C:\k`, `cd C:\k`, `git checkout claude/modest-rubin-p69b5g`. Optional but recommended: Defender exclusion for `C:\k`.
+2. `uv run --no-project scripts/windows/kyojin_win.py -v doctor`; fix each FAIL using its printed hint.
+3. `uv run --no-project scripts/windows/kyojin_win.py -v setup`.
 4. Re-run `doctor`; confirm `rocm_sdk`, `torch_gpu` and `triton` details.
-5. Send the log folders (or the `FAILURE.md` contents) to the session; journal the results.
+5. In the SDK root (`rocm-sdk path --root`) note whether `lib\hipblas.lib`, `lib\rocblas.lib` and `bin\hipcc.exe` exist (`dir`), and `torch.cuda.mem_get_info()`; also try one 8 GiB and one 16 GiB `torch.empty(..., device='cuda')`.
+6. Send the log folders (or the `FAILURE.md` contents) to the session; journal the results.
 
 **Done when.**
 - `doctor` has no FAIL; `setup` finished; `pip-freeze.txt` exists in the setup run folder.

@@ -15,3 +15,9 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 ## 2026-10-30: simplification
 
 - Decision: no new scripts for the spikes. S1-02 (hand-written 30-line extension under gitignored `logs/windows/scratch`), S1-04 (pasted snippet) and S3-01 (existing `serve.py`, or a local uncommitted edit of `examples/generator.py`) use manual steps that are cleaned up by deleting a folder or `git checkout`.
+
+## 2026-10-30: independent review, round 1
+
+- Opus 5.5 subagent reviewed the assessment read-only ([review/opus-r1.md](review/opus-r1.md)). Verdict: risky but viable. I re-checked its key claims in the code: all confirmed except one it could not reproduce (triton-windows RDNA3.5 support, which is on branch `readme`, so our claim stands).
+- Biggest corrections: `uv run` in the repo syncs the project (now `uv run --no-project`); clang-cl should be the host compiler (AMD does the same); `hgemm.cu` needs HOME/mkdir and rocBLAS fixes; serve.py forces HIP JIT and has two Windows crashes (symlinks, `register_at_fork`); ext.py JIT flags; assessment §5 wrongly listed absent wheels.
+- Round 2 requested from the reviewer: Windows-gated patches (kept in /tmp, not applied), standalone FLA test, clang-cl hello-extension recipe, `long` audit, TDR notes, exact tool messages for the error catalogue. **Next:** review those, ask the user for consent before adding any new file to the repo.

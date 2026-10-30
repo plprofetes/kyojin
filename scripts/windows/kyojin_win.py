@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Windows 11 / gfx1151 build orchestrator for Kyojin (POC, happy path, verbose by design).
 
-    uv run scripts/windows/kyojin_win.py doctor     # read-only preflight + probes
-    uv run scripts/windows/kyojin_win.py setup      # venv + ROCm torch + triton-windows + rocm-sdk init
-    uv run scripts/windows/kyojin_win.py build      # compile exllamav3_ext (editable install)
-    uv run scripts/windows/kyojin_win.py check      # import / GPU / Triton / extension smoke tests
-    uv run scripts/windows/kyojin_win.py serve --model <pack-dir>
+    uv run --no-project scripts/windows/kyojin_win.py doctor     # read-only preflight + probes
+    uv run --no-project scripts/windows/kyojin_win.py setup      # venv + ROCm torch + triton-windows + rocm-sdk init
+    uv run --no-project scripts/windows/kyojin_win.py build      # compile exllamav3_ext (editable install)
+    uv run --no-project scripts/windows/kyojin_win.py check      # import / GPU / Triton / extension smoke tests
+    uv run --no-project scripts/windows/kyojin_win.py serve --model <pack-dir>
 
 Every run writes logs/windows/<timestamp>-<command>/ (gitignored): run.log (DEBUG, everything), one NN-<step>.log per
 subprocess with its full combined output, env.json (redacted environment snapshot), report.json (every check with its
@@ -790,7 +790,7 @@ def probe_error(name: str, d: dict, default_hint: str) -> Check:
 def need_venv() -> Check | None:
     if venv_python().is_file():
         return None
-    return Check("venv", FAIL, f"{VENV} not found", {}, "run: uv run scripts/windows/kyojin_win.py setup")
+    return Check("venv", FAIL, f"{VENV} not found", {}, "run: uv run --no-project scripts/windows/kyojin_win.py setup")
 
 
 @_guard

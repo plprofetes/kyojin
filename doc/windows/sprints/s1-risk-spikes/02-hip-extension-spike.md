@@ -19,6 +19,10 @@ No new repo files or scripts. Everything lives in the gitignored scratch folder 
    set HIP_PATH=%ROCM_HOME%
    set PATH=%ROCM_HOME%\bin;%ROCM_HOME%\lib\llvm\bin;%PATH%
    set PYTORCH_ROCM_ARCH=gfx1151
+   set HIP_CLANG_PATH=%ROCM_HOME%\lib\llvm\bin
+   set CC=%ROCM_HOME%\lib\llvm\bin\clang-cl.exe
+   set CXX=%ROCM_HOME%\lib\llvm\bin\clang-cl.exe
+   set DISTUTILS_USE_SDK=1
    mkdir logs\windows\scratch\hello_ext & cd logs\windows\scratch\hello_ext
    ```
 2. Create three files in that folder (a trivial extension that exercises both hipcc for the `.cu` and `cl.exe` for the `.cpp`):
@@ -56,7 +60,7 @@ No new repo files or scripts. Everything lives in the gitignored scratch folder 
 **Done when.**
 - `.pyd` builds, imports, kernel output equals the torch reference; run folder saved.
 
-**If it fails.** Decision tree, in order: (a) env fixes (HIP_PATH/ROCM_PATH, INCLUDE/LIB, bitcode path); (b) force clang-cl as host compiler; (c) hipcc for all files; (d) the AMD HIP SDK installer instead of the pip SDK. If none works: stop, report, re-plan (possibly WSL2 or Linux dual boot, which the user has not asked for).
+**If it fails.** Decision tree, in order: (a) env fixes (HIP_PATH/ROCM_PATH, INCLUDE/LIB, bitcode path); (b) force clang-cl as host compiler; (c) hipcc for all files (note: the first attempt already uses `clang-cl` as host compiler as AMD does for its own Windows PyTorch build, TheRock `build_prod_wheels.py` @ `682b3407` lines 701-706; try plain `cl` only to compare); (d) the AMD HIP SDK installer instead of the pip SDK. If none works: stop, report, re-plan (possibly WSL2 or Linux dual boot, which the user has not asked for).
 
 **Evidence.** (run folders, versions, numbers; fill in)
 

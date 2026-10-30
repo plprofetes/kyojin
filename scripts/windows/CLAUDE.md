@@ -70,7 +70,7 @@ python scripts/windows/tasks.py next     # what to do now
 python scripts/windows/tasks.py check    # docs consistent
 python scripts/windows/test_kyojin_win.py && python scripts/windows/test_tasks.py
 # on the Windows machine
-uv run scripts/windows/kyojin_win.py -v doctor    # then setup, build, check, serve --model <dir>
+uv run --no-project scripts/windows/kyojin_win.py -v doctor    # then setup, build, check, serve --model <dir>
 ```
 
 ## Definition of done for a change

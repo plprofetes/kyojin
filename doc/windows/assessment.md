@@ -3,14 +3,14 @@
 Status: assessment only, no code changed. Date: 2026-10-30. Rev 2: Triton finding corrected, decisions and tooling added. Kyojin 1.8.3 vs upstream exllamav3 1.6.5.
 Target: one configuration. Windows 11 x64, Strix Halo (gfx1151), latest Adrenalin driver, Python 3.12, ROCm wheels from AMD's pip index.
 
-Plan, tasks and session journal: [README.md](README.md). Deferred items: [deferred.md](deferred.md).
+Independent review: [review/opus-r1.md](review/opus-r1.md). Plan, tasks and session journal: [README.md](README.md). Deferred items: [deferred.md](deferred.md).
 
 Legend: **[V]** verified from sources or the AMD wheel index this session; **[I]** inferred, needs a Windows run; **[?]** unknown.
 
 ## 1. Verdict
 
 - **Build the extension on Windows: plausible, small delta.** The C++ host code is already mostly Windows-aware (inherited from upstream). Torch's own `cpp_extension.py` in AMD's Windows ROCm wheel has HIP-on-Windows paths (`hipcc.exe`, MSVC runtime flag for hipcc). **[V]**
-- **Run the engine on Windows: Triton is available, memory is the gate.** 52 files import `triton`, 43 at module level. Rev 1 said Triton was blocked; that was stale. `triton-windows` (now `triton-lang/triton-windows`) lists RDNA3.5 (gfx115x, Strix Halo) as supported, uses `clang-cl` found automatically from the TheRock wheel, and 3.8.0.post29 / 3.9.0.post30 are on PyPI. **[V]** (README + releases pages.) Kyojin's Linux pin is triton 3.8.0, so start with `triton-windows<3.9`. Whether Kyojin's kernels (GDN/FLA, paged attention) compile and match on Windows is unverified **[?]**.
+- **Run the engine on Windows: Triton is available, memory is the gate.** 52 files import `triton`, 43 at module level. Rev 1 said Triton was blocked; that was stale. `triton-windows` (now `triton-lang/triton-windows`, README on branch `readme`, lines 33-36) lists RDNA3.5 (gfx115x, Strix Halo) as supported, uses `clang-cl` found automatically from the TheRock wheel, and 3.8.0.post29 / 3.9.0.post30 are on PyPI. **[V]** (README + releases pages.) Kyojin's Linux pin is triton 3.8.0, so start with `triton-windows<3.9`. Whether Kyojin's kernels (GDN/FLA, paged attention) compile and match on Windows is unverified **[?]**.
 - **Memory model is a second unknown.** The product premise is 100 GB-class models in 128 GB. Windows WDDM caps GPU-addressable memory differently from Linux GTT, and the Kyojin tiering code assumes Linux memory semantics. **[?]**
 - Recommendation: the build script itself doubles as the spike. Its `doctor` stage (section 6) runs (a) torch+ROCm matmul on gfx1151, (b) a one-file `CUDAExtension` compile, (c) a Triton kernel, so the first run on your box answers the open `[?]` items.
 
@@ -83,7 +83,7 @@ ROCm build builds 72 TUs (after `ROCM_EXCLUDE_*` in `build_config.py`). Only the
 
 ## 5. Windows dependency set (what the script must check)
 
-Available on AMD's nightly multi-arch index for win_amd64 **[V]**: `torch 2.15.0a0+rocm10.1.0a20260822`, `rocm-sdk-core`, `rocm-sdk-devel` (both `10.1.0a20260822`), `amd-torch-device-gfx1151` / `gfx115x`. Not present for Windows at this date: `triton`, `rocm-sdk-libraries-gfx1151`, `rocm`, `rocm-bootstrap` at `10.1.0a20260822` (device libs may come from the `amd-torch-device-*` wheel instead **[?]**; resolve in spike).
+Available on AMD's nightly multi-arch index for win_amd64 **[V]**: `torch 2.15.0a0+rocm10.1.0a20260822`, `rocm-sdk-core`, `rocm-sdk-devel` (both `10.1.0a20260822`), `amd-torch-device-gfx1151` / `gfx115x`. Also present for Windows (corrected after review, [opus-r1](review/opus-r1.md) #13; rev 1 wrongly said they were absent): `rocm` (platform-independent sdist), `rocm-bootstrap`, `rocm_sdk_libraries` win_amd64, all at `10.1.0a20260822`; torch's Windows METADATA requires `rocm[libraries]` and `rocm-bootstrap`. No Windows `triton` wheel on the AMD index; triton-windows comes from PyPI. Open: whether `lib\hipblas.lib` and `lib\rocblas.lib` exist in the devel tree (the libraries wheel ships DLLs only; `hgemm.cu` needs rocBLAS at link time).
 
 Preflight checks, each with a one-line fix hint:
 
@@ -100,7 +100,7 @@ Preflight checks, each with a one-line fix hint:
 
 ## 6. Build tooling choice and POC shape
 
-Status: `scripts/windows/kyojin_win.py` and `test_kyojin_win.py` written and unit-tested on Linux (25 tests); `doctor` dry-run on Linux works end to end. Never run on Windows. `setup.py` Windows+HIP edits made. Not committed.
+Status: `scripts/windows/kyojin_win.py` and `test_kyojin_win.py` written and unit-tested on Linux (25 tests); `doctor` dry-run on Linux works end to end. Never run on Windows. `setup.py` Windows+HIP edits made. Committed.
 
 ### 6.1 PowerShell vs Python
 
@@ -115,12 +115,12 @@ Why Python (stdlib only, one file, `argparse` subcommands):
 - Each check is a function returning `(ok, detail, fix_hint)`; mockable, so I can unit-test the logic here with pytest (fake `vswhere`, fake driver) before it touches your machine.
 - `subprocess.run(check=True)` fails loudly; paths via `pathlib`; no quoting traps.
 - VS environment capture is a well-trodden pattern: `vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`, then `cmd /c "VsDevCmd.bat -arch=amd64 && set"` merged into the child environment. (setuptools already does this for `cl.exe`; hipcc/clang-cl also needs `INCLUDE`/`LIB`.)
-- **uv** (single exe) as env manager: `uv python install 3.12`, `uv venv`, `uv pip install`. It brings its own Python, so nothing touches the system Python or PATH, which is the "venv, don't fight paths" requirement. Bootstrap is two lines: `winget install astral-sh.uv`, then `uv run scripts/windows/kyojin_win.py doctor`.
+- **uv** (single exe) as env manager: `uv python install 3.12`, `uv venv`, `uv pip install`. It brings its own Python, so nothing touches the system Python or PATH, which is the "venv, don't fight paths" requirement. Bootstrap is two lines: `winget install astral-sh.uv`, then `uv run --no-project scripts/windows/kyojin_win.py doctor`.
 - Task-runner layers (nox, invoke, doit) are not worth it for five subcommands.
 
 ### 6.2 Shape
 
-`scripts/windows/kyojin_win.py` (about 300 lines), subcommands, all idempotent, happy path, each failure prints the cause and the exact next command:
+`scripts/windows/kyojin_win.py` (about 1050 lines as of `cca1e17`; the independent review recommends trimming, see [review/opus-r1.md](review/opus-r1.md)), subcommands, all idempotent, happy path, each failure prints the cause and the exact next command:
 
 1. `doctor`: preflight (section 5), no side effects. Also reports free RAM for the compile.
 2. `setup`: `uv venv .venv-win` (Python 3.12), install torch/rocm from the AMD index with pinned versions, `triton-windows<3.9`, `requirements.txt`; `rocm-sdk init`; `rocm-sdk test`.
@@ -142,7 +142,7 @@ Serve Qwen (decision 1) with a small pack so RAM stays free for the compiler. Re
 - Build-only job is feasible on `windows-2022`: no GPU needed to compile `--offload-arch=gfx1151`. Reuse the upstream pattern (`windows_smoke` target, pwsh, uv, VS pin, sccache). **[I]**
 - Constraint: free runner disk (about 14 GB free on C:) versus a 12 GB SDK plus torch. May need the larger-runner tier or aggressive cleanup / D: drive. **[?]**
 - Cannot run tests on hosted runners (no GPU). Wheel is a build-validation artifact; runtime validation stays manual on your machine.
-- Kyojin `build.yml` has no ROCm or Windows-ROCm job today; add as new `target: windows_rocm_smoke`. Promote only after the local script passes. With the Python orchestrator, CI just calls `uv run scripts/windows/kyojin_win.py build`, so local and CI share one code path.
+- Kyojin `build.yml` has no ROCm or Windows-ROCm job today; add as new `target: windows_rocm_smoke`. Promote only after the local script passes. With the Python orchestrator, CI just calls `uv run --no-project scripts/windows/kyojin_win.py build`, so local and CI share one code path.
 
 ## 7b. Prior art (reuse, do not rebuild)
 

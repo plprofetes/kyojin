@@ -124,6 +124,82 @@ class RunTests(unittest.TestCase):
         self.assertEqual(rep[1]["hint"], "do this")
 
 
+class HelpfulErrors(unittest.TestCase):
+    SAMPLES = {
+        "no-msvc": "error: Microsoft Visual C++ 14.0 or greater is required.",
+        "missing-win-headers": "foo.cpp(3): fatal error C1083: Cannot open include file: 'windows.h': No such file",
+        "missing-hip-headers": "fatal error: 'hipblas/hipblas.h' file not found",
+        "missing-import-lib": "LINK : fatal error LNK1181: cannot open input file 'hipblas.lib'",
+        "device-libs": "clang: error: cannot find ROCm device library for gfx1151",
+        "torch-not-rocm": "OSError: CUDA_HOME environment variable is not set.",
+        "build-isolation": "ModuleNotFoundError: No module named 'torch'",
+        "path-too-long": "OSError: [WinError 206] The filename or extension is too long",
+        "dll-missing": "ImportError: DLL load failed while importing exllamav3_ext: The specified module could not be found.",
+        "entrypoint": "process finished with exit code 0xC0000139",
+        "no-matching-dist": "No matching distribution found for torch==2.15.0a0+rocm10.1.0a20260822",
+        "network": "ConnectionResetError: Connection reset by peer",
+        "oom": "LLVM ERROR: out of memory",
+        "file-locked": "PermissionError: [WinError 32] The process cannot access the file because it is being used by another process",
+        "flag-leak": "clang: error: unknown argument: '-Xcompiler=/Zc:preprocessor'",
+        "msvc-flag-on-clang": "cl : Command line error D8021 : invalid numeric argument '/Wno-register'",
+        "python-h": "fatal error C1083: Cannot open include file: 'Python.h'",
+        "invalid-device-function": "RuntimeError: HIP error: invalid device function",
+        "triton-compiler": "RuntimeError: Failed to find C compiler. Please specify via CC environment variable",
+        "no-triton": "ModuleNotFoundError: No module named 'triton'",
+    }
+
+    def test_every_signature_has_a_sample_and_matches(self):
+        ids = {k.id for k in kw.KNOWN}
+        self.assertEqual(ids, set(self.SAMPLES), "add a sample for every signature (and vice versa)")
+        for kid, text in self.SAMPLES.items():
+            self.assertIn(kid, [k.id for k in kw.diagnose(text)], kid)
+
+    def test_no_false_positive_on_clean_output(self):
+        clean = "Compiling foo.cu\n[12/40] hipcc -O3 ...\nBuild succeeded. 0 errors. -Wno-error ok\n"
+        self.assertEqual(kw.diagnose(clean), [])
+        self.assertEqual(kw.extract_errors(clean), [])
+
+    def test_extract_first_errors_with_line_numbers(self):
+        out = "\n".join(["ok"] * 5 + ["FAILED: a.o", "a.cu:1: error: bad thing"] + ["noise"] * 50 + ["ninja: error: tail"])
+        got = kw.extract_errors(out, limit=2, first_line_no=2)
+        self.assertEqual([n for n, _ in got], [7, 8])
+        self.assertIn("FAILED", got[0][1])
+
+    def test_render_failure_contains_cause_fix_and_lines(self):
+        k = [x for x in kw.KNOWN if x.id == "oom"]
+        txt = kw.render_failure("build", ["uv", "pip"], 3221225477, 12.0, "05-build.log", k, [(9, "error: x")], "a\nb")
+        for needle in ("FAILED: build", "ACCESS_VIOLATION", "05-build.log", "likely  : Compiler ran out of memory", "fix", "L9: error: x"):
+            self.assertIn(needle, txt)
+        self.assertIn("no known signature", kw.render_failure("t", ["x"], 1, 1.0, "l", [], [], ""))
+
+
+class FailStep(unittest.TestCase):
+    def test_fail_step_writes_failure_md_and_check(self):
+        with tempfile.TemporaryDirectory() as t:
+            run = kw.Run("unit", verbose=False, root=Path(t))
+            try:
+                r = run.run([sys.executable, "-c", "import sys;print('FAILED: x.o');print('fatal error: \\'hip/hip_runtime.h\\' file not found');sys.exit(1)"], "compile")
+                c = run.fail_step(r, "build exllamav3_ext", ["cmd"])
+                self.assertEqual(c.status, kw.FAIL)
+                self.assertIn("missing-hip-headers", c.details["known"])
+                self.assertIn("rocm-sdk init", c.hint)
+                md = (run.dir / "FAILURE.md").read_text()
+                self.assertIn("hip/hip_runtime.h", md)
+                self.assertIn("L2:", md)           # line numbers count the log's "$ command" header as line 1
+                # first_errors line number really points at that line of the step log
+                n = c.details["first_errors"][0][0]
+                self.assertIn("FAILED", r.logfile.read_text().splitlines()[n - 1])
+            finally:
+                run.close()
+
+    def test_probe_error_diagnoses_traceback(self):
+        c = kw.probe_error("triton", {"error": "ImportError: x", "traceback": "ModuleNotFoundError: No module named 'triton'"}, "dflt")
+        self.assertIn("no-triton", c.summary)
+        self.assertIn("setup", c.hint)
+        c2 = kw.probe_error("triton", {"error": "Weird: new"}, "dflt")
+        self.assertEqual(c2.hint, "dflt")
+
+
 @unittest.skipIf(kw.is_windows(), "Linux-side behaviour of Windows-only probes")
 class ProbesOffWindows(unittest.TestCase):
     def setUp(self):

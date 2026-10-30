@@ -8,6 +8,7 @@ Scope: everything under `scripts/windows/` and `doc/windows/`, plus the small Wi
 - Everything lives in a `uv`-managed venv `.venv-win` in the repo; nothing is installed into the system Python or PATH.
 - ROCm torch, `rocm-sdk` and `triton-windows` come from AMD's nightly index and PyPI, pinned in one place (`kyojin_win.py` constants, env overrides `KYOJIN_*`).
 - Build chain: MSVC (`cl.exe`) for host C++, `hipcc.exe` for device code, driven by setuptools + torch `BuildExtension` + ninja. No CMake, no new build system.
+- Native Windows only: both the build and the performance target are native Windows. WSL2 and dual boot are not goals (WSL2 yields Linux binaries and a busy-polling GPU bridge); use them only as diagnostics if the user asks.
 - POC goal: serve a small Qwen EXL3 pack with `tools/qwen/serve.py`. Linux is the product; Windows changes must not alter Linux behaviour.
 - The assistant's sandbox is Linux with no GPU and no Windows. Nothing here is verified on Windows until a run folder from the real machine says so.
 

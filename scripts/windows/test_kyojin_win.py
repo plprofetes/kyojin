@@ -71,6 +71,13 @@ class Pure(unittest.TestCase):
             self.assertEqual(e["EXL3_HIP_DEFINES"], "EXL3_HIP_STG_PAD")
             self.assertEqual(kw.sdk_env(root, {"PATH": "o", "EXL3_HIP_DEFINES": "A"})["EXL3_HIP_DEFINES"], "A")
 
+    def test_parse_cim_gpus(self):
+        one = '{"Name": "AMD Radeon(TM) 8060S Graphics", "DriverVersion": "32.0.1"}'
+        self.assertEqual(kw.parse_cim_gpus(one)[0]["Name"], "AMD Radeon(TM) 8060S Graphics")
+        self.assertEqual(len(kw.parse_cim_gpus("[" + one + "," + one + "]")), 2)
+        self.assertEqual(kw.parse_cim_gpus(""), [])
+        self.assertEqual(kw.parse_cim_gpus("not json"), [])
+
     def test_serve_command(self):
         c = kw.serve_command("py", "m", 8000, 8192)
         self.assertIn("--no-vision", c)

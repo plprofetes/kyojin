@@ -463,8 +463,8 @@ KNOWN: tuple[Known, ...] = (
           "Read the probe's `elementwise_ms` and `matmul` per BLAS backend in report.json; retry with the other workload stopped; if elementwise works and every backend fails, check rocblas/hipblaslt DLLs next to torch."),
     Known("hip-oom", r"HIP out of memory|OutOfMemoryError",
           "GPU allocation failed",
-          "The request exceeds the GPU memory Windows exposes, or memory is fragmented.",
-          "Record torch.cuda.mem_get_info() (task S1-04); use a smaller model/context."),
+          "The request exceeds the GPU memory actually available. On Windows torch.cuda.mem_get_info() over-reports free memory (seen: 107.55 GiB 'free' while 1 GiB failed because another process held the VRAM).",
+          "Stop other GPU workloads (Task Manager > Performance > GPU > Dedicated GPU memory); then retry. Use the probe's alloc_gib results, not mem_get_info, for the real limit."),
     Known("file-locked", r"PermissionError: \[WinError (5|32)\]|Access is denied|being used by another process",
           "File locked or access denied",
           "Another process (a running python, an editor, antivirus) holds a file in the repo or .venv-win.",
@@ -814,9 +814,18 @@ try:
                 out["matmul"][str(backend)] = "ok %.1f ms" % ((time.time() - t) * 1000)
             except BaseException as e:
                 out["matmul"][str(backend)] = "%s: %s" % (type(e).__name__, str(e)[:200])
-        step("alloc 1 GiB")
-        big = torch.empty(int(2**30), dtype=torch.uint8, device="cuda"); del big
-        out["alloc_1gib"] = "ok"
+        # mem_get_info is NOT trustworthy on Windows (reported 107.55 GiB free while a 1 GiB allocation failed because
+        # another process held the VRAM): measure what can really be allocated, in single blocks of growing size
+        out["alloc_gib"] = {}
+        for gib in (0.0625, 0.25, 1, 4, 16):
+            step("alloc %s GiB" % gib)
+            try:
+                big = torch.empty(int(gib * 2**30), dtype=torch.uint8, device="cuda"); del big
+                out["alloc_gib"][str(gib)] = "ok"
+            except BaseException as e:
+                out["alloc_gib"][str(gib)] = "%s" % type(e).__name__
+                break
+        torch.cuda.empty_cache()
         free2, _ = torch.cuda.mem_get_info(0)
         out["device"]["mem_free_after_gb"] = round(free2 / 2**30, 2)
     step("cpp_extension info")
@@ -957,13 +966,20 @@ def probe_torch(run: Run, env: dict[str, str] | None = None) -> Check:
     if arch != GFX:
         return Check("torch_gpu", WARN, f"device arch {arch!r}, expected {GFX}", d, "this POC targets gfx1151 only")
     mm = d.get("matmul", {})
+    allocs = d.get("alloc_gib", {})
+    max_ok = max([float(k) for k, v in allocs.items() if v == "ok"] or [0.0])
     summary = (f"torch {d['torch']} hip {d['hip']}; {dev['name']} {arch}; {dev['total_gb']} GiB visible, "
-               f"{dev['mem_free_gb']} GiB free; elementwise {d.get('elementwise_ms')} ms; matmul by backend: {mm}")
+               f"{dev['mem_free_gb']} GiB reported free (unreliable); largest single allocation that worked: {max_ok} GiB; "
+               f"elementwise {d.get('elementwise_ms')} ms; matmul by backend: {mm}")
     if not any(v.startswith("ok") for v in mm.values()):
         return Check("torch_gpu", FAIL, "no BLAS backend can run a matmul; " + summary, d,
                      "elementwise kernels work but hipBLAS/hipBLASLt do not: see matmul errors in details; try with the other GPU workload stopped, then check rocblas/hipblaslt DLLs next to torch")
-    return Check("torch_gpu", WARN if mm.get("None", "").startswith("ok") is False else PASS, summary, d,
-                 "default BLAS backend failed but another works: set torch.backends.cuda.preferred_blas_library accordingly" if not mm.get("None", "").startswith("ok") else "")
+    if max_ok < 1:
+        return Check("torch_gpu", WARN, "GPU memory is effectively full (single allocations above " + str(max_ok) + " GiB fail); " + summary, d,
+                     "another process holds the VRAM: stop it before GPU tests; Task Manager > Performance > GPU shows Dedicated GPU memory in use")
+    if not mm.get("None", "").startswith("ok"):
+        return Check("torch_gpu", WARN, summary, d, "default BLAS backend failed but another works: choose it with torch.backends.cuda.preferred_blas_library")
+    return Check("torch_gpu", PASS, summary, d)
 
 
 @_guard

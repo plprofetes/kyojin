@@ -108,3 +108,8 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - `uv pip freeze` of the working venv showed two more pre-releases besides tokenizers: **pydantic 2.14.0b1, safetensors 0.9.0rc1** **[V]**; why uv allows pre-releases in the requirements step is not established (`UV_PRERELEASE` is not set here; the user's environment was not inspected) **[?]**. Neither was exercised yet (no model loaded).
 - New `scripts/windows/constraints-win.txt` (exact `==`, no pre-releases): the freeze, with pydantic/pydantic-core/safetensors replaced by the `uv.lock` versions. `setup` passes it as `-c` to both `uv pip install` steps; `env.json` records its sha256. Replaces the single `TOKENIZERS_SPEC`. Test: exact versions, no pre-release, every `requirements.txt` package pinned. torch/rocm/triton stay pinned by the constants. `requirements.txt` untouched (Linux).
 - The user's current venv still has the two pre-releases until `setup` or the command in the next message is run.
+
+## 2026-10-30: Triton GDN kernels pass on gfx1151 (S1-03 done)
+
+- `fla_standalone_test.py` PASS on the target: o err 2.3e-4, state err 1.1e-3 against the fp32 recurrence; cold 49.9 s, warm 0.7 ms; triton-windows 3.9.0.post30 **[V]**. The biggest unknown behind Qwen3.5 (GDN layers) is therefore cleared at small shapes; `--qwen` (T=4096) not run.
+- **Next:** S1-05 (model pack on disk) and S3-01 (end-to-end smoke via `serve`). Expected first failures from the catalogue: `register_at_fork` in `tools/startup_health.py` (patch saved), `libamdhip64.so` in `util/hip_lib.py` (S3-02 patch saved), POSIX-only memory/pagecache code.

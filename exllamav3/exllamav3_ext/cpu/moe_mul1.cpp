@@ -68,7 +68,9 @@ constexpr uint32_t MUL1_MULT = 0x83DCD12Du;
 constexpr float HAD_SCALE = 0.088388347648f;
 constexpr int MAX_M = 4;
 
-#if defined(__GNUC__) && defined(__linux__)
+// clang-cl (the Windows host compiler) defines __clang__ but not __GNUC__ and, unlike cl.exe, needs the target
+// attributes for the intrinsics; only a cl.exe build gets the empty fallback below.
+#if (defined(__GNUC__) && defined(__linux__)) || defined(__clang__)
 #define M1_TARGET_AVX2 __attribute__((target("avx2,fma,f16c")))
 #define M1_TARGET_BW __attribute__((target("avx512f,avx512bw,avx512vl,fma,f16c")))
 #define M1_TARGET_VNNI __attribute__((target("avx512f,avx512bw,avx512vl,avx512vnni,fma,f16c")))

@@ -102,3 +102,9 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - After pinning `tokenizers==0.23.3`: `check` `20261030-233000-check` PASS=4 (rocm_sdk, torch_gpu 16 GiB single allocation + matmul on all BLAS backends, triton 3.9.0, extension 135 symbols + `import exllamav3`) **[V]**. The Windows build of the extension and its import work on gfx1151; GPU kernels have not been exercised yet.
 - Pinning: the rest of `requirements.txt` is still `>=`; user wants strict pins. Plan: constraints file from a known-good `pip freeze` of this venv (next entry).
 - **Next:** pin from the freeze (below); `fla_standalone_test.py` (S1-03); then S3-01 smoke (one real kernel call).
+
+## 2026-10-30: all Python packages pinned (`constraints-win.txt`)
+
+- `uv pip freeze` of the working venv showed two more pre-releases besides tokenizers: **pydantic 2.14.0b1, safetensors 0.9.0rc1** **[V]**; why uv allows pre-releases in the requirements step is not established (`UV_PRERELEASE` is not set here; the user's environment was not inspected) **[?]**. Neither was exercised yet (no model loaded).
+- New `scripts/windows/constraints-win.txt` (exact `==`, no pre-releases): the freeze, with pydantic/pydantic-core/safetensors replaced by the `uv.lock` versions. `setup` passes it as `-c` to both `uv pip install` steps; `env.json` records its sha256. Replaces the single `TOKENIZERS_SPEC`. Test: exact versions, no pre-release, every `requirements.txt` package pinned. torch/rocm/triton stay pinned by the constants. `requirements.txt` untouched (Linux).
+- The user's current venv still has the two pre-releases until `setup` or the command in the next message is run.

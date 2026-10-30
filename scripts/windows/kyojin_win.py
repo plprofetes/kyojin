@@ -899,6 +899,7 @@ EXT_PROBE = r"""
 import json, traceback
 out = {}
 try:
+    import torch   # first: it loads amdhip64/hipblas/rocblas and the torch DLLs the extension's imports resolve against (what `import exllamav3` does too)
     import exllamav3_ext as e
     out["file"] = e.__file__
     out["n_symbols"] = len([n for n in dir(e) if not n.startswith("_")])

@@ -86,3 +86,7 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - `build` #5 compiled and linked everything except one symbol: `stloader_cu.obj : LNK2001 __truncsfhf2` (compiler-rt float->half helper, from the host half of `__float2half_rn` in `inplace_bf16_to_fp16_cpu`) **[I]**. clang-cl links `clang_rt.builtins` by default; setuptools calls `link.exe` directly, so the MSVC CRT is all it sees.
 - Found on the user's machine: `_rocm_sdk_devel\lib\llvm\lib\clang\23\lib\windows\clang_rt.builtins-x86_64.lib` (a recursive `-Filter` search of the devel tree missed it, a search from `.venv-win` with `-Include` found it; junction/reparse point **[?]**). Fix: `setup.py` (Windows+HIP only) passes it as `extra_link_args`, raising if absent. Fallback if that is not enough: `-Xarch_host -mf16c` (unverified clang flag). Signature `compiler-rt-builtin` added.
 - **Next:** `git pull`; `build` (objects reused). After a green link the script runs the `extension` probe; then `check`.
+
+## 2026-10-30: extension links; first import fails with `DLL load failed`
+
+- `build` green and linked. The `extension` probe failed with `DLL load failed while importing exllamav3_ext`. The probe imported the extension before `torch`; Python 3.8+ does not resolve an extension's dependent DLLs from PATH, and the ROCm/torch DLLs are only loaded once `torch` is imported **[I]**. Probe changed to `import torch` first (S2-02). If it still fails, the next step is `os.add_dll_directory(<sdk>\bin)` and a dependency dump (`dumpbin /dependents`) to name the missing DLL.

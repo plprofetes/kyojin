@@ -1,6 +1,6 @@
 # Spike: a minimal HIP extension compiles and loads with hipcc.exe + cl.exe
 
-- Status: todo
+- Status: done
 - Depends: S1-01
 - Risk: HIGHEST. No public guide for building PyTorch C++/HIP extensions with hipcc on Windows was found; torch has the code paths but nothing proves them for this SDK. If this fails, the port as designed fails.
 
@@ -65,6 +65,7 @@ No new repo files or scripts. Everything lives in the gitignored scratch folder 
 **Evidence.** (run folders, versions, numbers; fill in)
 
 - 
+- 2026-10-30: superseded by [S2-01](../s2-extension-builds/01-full-build-triage.md): the full extension (not a hello-world one) builds, links and imports with MSVC host + clang-cl + hipcc **[V]**; the findings of the spike (ninja on PATH, `-Xcompiler` pairs, VsDevCmd env) are in the journal.
 
 **Links.** [setup.py](../../../../setup.py) · [torch cpp_extension notes](../../assessment.md) (§7b) · [env.sh (Linux reference)](../../../../tools/strix_halo/env.sh) · next: [S1-03](03-triton-on-gfx1151.md) (independent, can run in parallel)
 

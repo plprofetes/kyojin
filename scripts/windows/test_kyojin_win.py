@@ -126,26 +126,40 @@ class RunTests(unittest.TestCase):
 
 class HelpfulErrors(unittest.TestCase):
     SAMPLES = {
-        "no-msvc": "error: Microsoft Visual C++ 14.0 or greater is required.",
-        "missing-win-headers": "foo.cpp(3): fatal error C1083: Cannot open include file: 'windows.h': No such file",
+        "uv-project-sync": "Creating virtual environment at: .venv",
+        "no-msvc": "subprocess.CalledProcessError: Command '['where', 'cl']' returned non-zero exit status 1.",
+        "distutils-use-sdk": "UserWarning: It seems that the VC environment is activated but DISTUTILS_USE_SDK is not set.",
+        "missing-win-headers": "C:\\sdk\\hip_runtime.h(10,10): fatal error: 'cstdint' file not found",
         "missing-hip-headers": "fatal error: 'hipblas/hipblas.h' file not found",
-        "missing-import-lib": "LINK : fatal error LNK1181: cannot open input file 'hipblas.lib'",
-        "device-libs": "clang: error: cannot find ROCm device library for gfx1151",
+        "no-hip-runtime": "clang: error: cannot find HIP runtime; provide its path via '--rocm-path'",
+        "no-rocm-device-lib": "clang: error: cannot find ROCm device library; provide its path via '--rocm-path'",
         "torch-not-rocm": "OSError: CUDA_HOME environment variable is not set.",
         "build-isolation": "ModuleNotFoundError: No module named 'torch'",
+        "restrict-cl": "exl3_kernel_map.cuh(53): error C2146: syntax error: missing ')' before identifier 'A'",
+        "mkdir-2arg": "hgemm.cu:163:5: error: use of undeclared identifier 'mkdir'",
+        "unresolved-link": "hgemm.obj : error LNK2019: unresolved external symbol rocblas_create_handle referenced in function",
+        "missing-import-lib": "LINK : fatal error LNK1181: cannot open input file 'rocblas.lib'",
+        "missing-crt-lib": "LINK : fatal error LNK1104: cannot open file 'msvcprt.lib'",
         "path-too-long": "OSError: [WinError 206] The filename or extension is too long",
         "dll-missing": "ImportError: DLL load failed while importing exllamav3_ext: The specified module could not be found.",
-        "entrypoint": "process finished with exit code 0xC0000139",
+        "entrypoint": "ImportError: DLL load failed while importing exllamav3_ext: The specified procedure could not be found.",
         "no-matching-dist": "No matching distribution found for torch==2.15.0a0+rocm10.1.0a20260822",
         "network": "ConnectionResetError: Connection reset by peer",
-        "oom": "LLVM ERROR: out of memory",
+        "compiler-oom": "LLVM ERROR: out of memory",
+        "hip-oom": "torch.OutOfMemoryError: HIP out of memory. Tried to allocate 16.00 GiB",
         "file-locked": "PermissionError: [WinError 32] The process cannot access the file because it is being used by another process",
         "flag-leak": "clang: error: unknown argument: '-Xcompiler=/Zc:preprocessor'",
-        "msvc-flag-on-clang": "cl : Command line error D8021 : invalid numeric argument '/Wno-register'",
-        "python-h": "fatal error C1083: Cannot open include file: 'Python.h'",
+        "python-h": "fatal error: 'Python.h' file not found",
+        "ext-not-built": "ImportError: exllamav3_ext is not built. On Windows with ROCm torch the JIT build is not supported",
         "invalid-device-function": "RuntimeError: HIP error: invalid device function",
-        "triton-compiler": "RuntimeError: Failed to find C compiler. Please specify via CC environment variable",
+        "tdr": "RuntimeError: HIP error: unspecified launch failure",
+        "triton-hip-dll": "RuntimeError: cannot locate amdhip64.dll after attempted paths ['C:\\\\x']",
+        "triton-cc-fail": "Failed to compile. cc_cmd: ['clang-cl.exe', 'main.c']",
+        "triton-import-order": "ImportError: DLL load failed while importing libtriton",
         "no-triton": "ModuleNotFoundError: No module named 'triton'",
+        "symlink-checkout": 'File "C:\\k\\tools\\qwen\\image_cache.py", line 1',
+        "register-at-fork": "AttributeError: module 'os' has no attribute 'register_at_fork'",
+        "hip-lib-windows": "OSError: no libamdhip64.so or libamdhip64.so.<version> in the torch lib directory",
     }
 
     def test_every_signature_has_a_sample_and_matches(self):
@@ -153,6 +167,15 @@ class HelpfulErrors(unittest.TestCase):
         self.assertEqual(ids, set(self.SAMPLES), "add a sample for every signature (and vice versa)")
         for kid, text in self.SAMPLES.items():
             self.assertIn(kid, [k.id for k in kw.diagnose(text)], kid)
+
+    def test_symlink_probe_on_a_real_checkout(self):
+        with tempfile.TemporaryDirectory() as t:
+            run = kw.Run("unit", verbose=False, root=Path(t))
+            try:
+                c = kw.probe_symlinks(run)
+            finally:
+                run.close()
+        self.assertEqual(c.status, kw.PASS, c.summary)   # Linux checkout has real symlinks
 
     def test_no_false_positive_on_clean_output(self):
         clean = "Compiling foo.cu\n[12/40] hipcc -O3 ...\nBuild succeeded. 0 errors. -Wno-error ok\n"
@@ -166,7 +189,7 @@ class HelpfulErrors(unittest.TestCase):
         self.assertIn("FAILED", got[0][1])
 
     def test_render_failure_contains_cause_fix_and_lines(self):
-        k = [x for x in kw.KNOWN if x.id == "oom"]
+        k = [x for x in kw.KNOWN if x.id == "compiler-oom"]
         txt = kw.render_failure("build", ["uv", "pip"], 3221225477, 12.0, "05-build.log", k, [(9, "error: x")], "a\nb")
         for needle in ("FAILED: build", "ACCESS_VIOLATION", "05-build.log", "likely  : Compiler ran out of memory", "fix", "L9: error: x"):
             self.assertIn(needle, txt)

@@ -1,5 +1,6 @@
 """Logic tests for kyojin_win.py. Stdlib unittest, no torch/GPU/Windows needed:  python -m unittest scripts/windows/test_kyojin_win.py"""
 import json
+import re
 import os
 import sys
 import tempfile
@@ -46,6 +47,20 @@ class Pure(unittest.TestCase):
         self.assertNotIn('\\"', line)    # cmd does not unescape \" (the old single-string form produced it)
         self.assertIn('call "C:\\Program Files (x86)\\VS\\VsDevCmd.bat" -arch=amd64', line)
         self.assertTrue(line.endswith(">nul 2>&1 && set"))
+
+    def test_constraints_are_exact_stable_and_cover_requirements(self):
+        lines = [l.strip() for l in kw.CONSTRAINTS.read_text(encoding="utf-8").splitlines() if l.strip() and not l.startswith("#")]
+        pins = {}
+        for l in lines:
+            m = re.fullmatch(r"([A-Za-z0-9_.-]+)==(\d+(?:\.\d+)*(?:\.post\d+)?)", l)    # exact, no a/b/rc/dev pre-release
+            self.assertIsNotNone(m, l)
+            pins[m.group(1).lower().replace("_", "-")] = m.group(2)
+        self.assertEqual(len(pins), len(lines), "duplicate pin")
+        reqs = [re.split(r"[<>=!~\[; ]", l.strip())[0].lower().replace("_", "-")
+                for l in (kw.REPO / "requirements.txt").read_text(encoding="utf-8").splitlines() if l.strip()]
+        for r in reqs:
+            if r != "torch":    # torch comes from the AMD index (TORCH_VER)
+                self.assertIn(r, pins, f"requirements.txt package {r} is not pinned in constraints-win.txt")
 
     def test_pick_vs(self):
         self.assertIsNone(kw.pick_vs("[]"))

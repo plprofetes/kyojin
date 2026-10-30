@@ -77,6 +77,19 @@ if torch and torch_version.hip:
         extra_cflags += ["-I" + dev_include]
         extra_cuda_cflags += ["-I" + dev_include]
 
+extra_link_args = []
+if windows and torch and torch_version.hip:
+    # The host half of the .cu files (e.g. stloader_cu.cu __float2half_rn) makes clang emit calls to compiler-rt
+    # builtins such as __truncsfhf2. clang-cl adds clang_rt.builtins itself, but setuptools calls link.exe directly,
+    # which only sees the MSVC CRT (LNK2001). Link the ROCm LLVM copy explicitly; no silent fallback.
+    import glob
+    _rocm_home = os.environ.get("EXL3_ROCM_SDK") or cpp_extension.ROCM_HOME or ""
+    _builtins = sorted(glob.glob(os.path.join(
+        _rocm_home, "lib", "llvm", "lib", "clang", "*", "lib", "windows", "clang_rt.builtins-x86_64.lib")))
+    if not _builtins:
+        raise RuntimeError(f"clang_rt.builtins-x86_64.lib not found under {_rocm_home!r} (set EXL3_ROCM_SDK to the ROCm devel root)")
+    extra_link_args += [_builtins[-1]]
+
 def _host_cxx_has_format():
     # Probe whether the host C++ compiler ships a <format> header (GCC 13+).
     # Older toolchains have no such header, where -include would itself be a
@@ -180,6 +193,7 @@ setup_kwargs = (
                 extension_name,
                 sources,
                 extra_compile_args=extra_compile_args,
+                extra_link_args=extra_link_args,
                 include_dirs=[sources_dir],
                 # Windows resolves every import at link time (Linux leaves them to the loader): hgemm.cu calls
                 # hipBLAS and, under USE_ROCM, rocBLAS directly, so both import libraries are needed on ROCm

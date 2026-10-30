@@ -174,3 +174,8 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - `turboderp/Qwen3.8-27B-exl3` branch **`4.00bpw`**: 15.73 GiB (`model-0000{1,2}-of-00002.safetensors`, `generation_config.json`, `chat_template.jinja`, tokenizer files), `model.safetensors.index.json` lists **39 `mtp.*` tensors** of 2426 **[V]**. This matches the README's tested config (Qwen3.8-27B 4.0 bpw, MTP + n-gram) and fits the GPU easily. Variants `SC_4.00bpw_H5` / `SC_4.00bpw_H5_V6` (15.26 GiB, quantized vision tower, needs ExLlamaV3 1.4.4 per the card) also have 39 mtp tensors.
 - yamz-labs hosts GLM-5.3-Flash, MiMo, Flint, Nanbeige4.3-33B, DeepSeek-V4.1-Flash, **Qwen3.8-Flash-Next-EXL3-Yamz** (size not checked), but no small Qwen pack.
 - Plan: download the 27B `4.00bpw` pack in the background; meanwhile S4-02 (second-launch time) and S4-05 (soak) on the 9B pack; then MTP on 27B.
+
+## 2026-10-30: parity plan without a Linux box
+
+- User has no Linux machine for this device. The 9B model card has only a KLD plot (no numbers) **[V: HF README]**, so there is no published figure to compare against. Plan for S3-05/S4-04: A/B on Windows between the default HIP chain and the engine's own fallback (`EXL3_PLE_HIP/DQ_HIP/GR_HIP/GDN_FUSE/GDN_HF=0`), which `serve.py` documents as bitwise-equal paths; compare greedy ids and logprobs (`logprobs`, `top_logprobs`, `return_token_ids`, non-streaming). Limits: it does not validate the stack against another platform or against the unquantized model.
+- `~/.cache/exllamav3/*.hsaco` (on Windows `%USERPROFILE%\.cache\exllamav3`) is where the JIT kernels land (`gdn_hf_*`, `gr_mix_*`, `ple_*`, `qsa_pf_*`); its listing is the S3-03 evidence. The default serve log shows only the compiler line.

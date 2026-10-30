@@ -16,7 +16,7 @@ Prior art this file follows (ideas and documented command patterns only; no thir
   * triton-lang/triton-windows (MIT-style): `pip install "triton-windows<3.9"`, clang-cl found from the ROCm wheel.
   * Kyojin tools/strix_halo/env.sh and rebuild.sh (MIT): build-time ROCm variables, EXL3_HIP_DEFINES default.
   * Microsoft vswhere / VsDevCmd.bat documented usage for locating MSVC and capturing its environment.
-See doc/windows-port-assessment.md section 7b for the licence notes.
+See doc/windows/assessment.md section 7c for the licence notes.
 """
 from __future__ import annotations
 
@@ -345,7 +345,7 @@ class Known:
 
 
 # HYPOTHESES from how these toolchains usually fail, not yet observed on this stack. When a real failure matches
-# nothing here, add its signature after the first run (see doc/windows-deferred.md, "error catalogue").
+# nothing here, add its signature after the first run (see doc/windows/deferred.md, "error catalogue").
 KNOWN: tuple[Known, ...] = (
     Known("no-msvc", r"Microsoft Visual C\+\+ 1\d\.\d or greater is required|Unable to find vcvarsall|cl\.exe.*not (found|recognized)|'cl' is not recognized",
           "MSVC compiler not found",

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Windows 11 / gfx1151 build orchestrator for Kyojin (POC, happy path, verbose by design).
 
-    uv run --no-project scripts/windows/kyojin_win.py doctor     # read-only preflight + probes
-    uv run --no-project scripts/windows/kyojin_win.py setup      # venv + ROCm torch + triton-windows + rocm-sdk init
-    uv run --no-project scripts/windows/kyojin_win.py build      # compile exllamav3_ext (editable install)
-    uv run --no-project scripts/windows/kyojin_win.py check      # import / GPU / Triton / extension smoke tests
-    uv run --no-project scripts/windows/kyojin_win.py serve --model <pack-dir>
+    uv run --no-project python scripts/windows/kyojin_win.py doctor     # read-only preflight + probes
+    uv run --no-project python scripts/windows/kyojin_win.py setup      # venv + ROCm torch + triton-windows + rocm-sdk init
+    uv run --no-project python scripts/windows/kyojin_win.py build      # compile exllamav3_ext (editable install)
+    uv run --no-project python scripts/windows/kyojin_win.py check      # import / GPU / Triton / extension smoke tests
+    uv run --no-project python scripts/windows/kyojin_win.py serve --model <pack-dir>
 
 Every run writes logs/windows/<timestamp>-<command>/ (gitignored): run.log (DEBUG, everything), one NN-<step>.log per
 subprocess with its full combined output, env.json (redacted environment snapshot), report.json (every check with its
@@ -372,7 +372,7 @@ KNOWN: tuple[Known, ...] = (
     Known("uv-project-sync", r"Creating virtual environment at: \.venv\b",
           "uv synced the repository project instead of running the script alone",
           "`uv run` inside this repo installs the project (pyproject has [tool.uv] package = true), pulling CPU/CUDA torch.",
-          "Delete .venv and always run `uv run --no-project scripts/windows/kyojin_win.py ...`."),
+          "Delete .venv and always run `uv run --no-project python scripts/windows/kyojin_win.py ...`."),
     Known("no-msvc", r"Microsoft Visual C\+\+ 1\d\.\d or greater is required|Unable to find vcvarsall|'cl' is not recognized|Command '\['where', 'cl'\]' returned non-zero",
           "MSVC compiler / developer environment not found",
           "Build Tools are missing, or the VS environment was not applied (torch runs `where cl` even when clang-cl is the host compiler).",
@@ -894,7 +894,7 @@ def probe_error(name: str, d: dict, default_hint: str) -> Check:
 def need_venv() -> Check | None:
     if venv_python().is_file():
         return None
-    return Check("venv", FAIL, f"{VENV} not found", {}, "run: uv run --no-project scripts/windows/kyojin_win.py setup")
+    return Check("venv", FAIL, f"{VENV} not found", {}, "run: uv run --no-project python scripts/windows/kyojin_win.py setup")
 
 
 @_guard
@@ -1163,7 +1163,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if Path(sys.prefix).resolve() == (REPO / ".venv").resolve():
         print("kyojin_win is running inside the repository's .venv: `uv run` synced the project (pulls CPU/CUDA torch).\n"
-              "Delete .venv and run: uv run --no-project scripts/windows/kyojin_win.py " + " ".join(argv or sys.argv[1:]), file=sys.stderr)
+              "Delete .venv and run: uv run --no-project python scripts/windows/kyojin_win.py " + " ".join(argv or sys.argv[1:]), file=sys.stderr)
         return 2
     run = Run(args.cmd, args.verbose)
     try:

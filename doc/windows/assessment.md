@@ -115,7 +115,7 @@ Why Python (stdlib only, one file, `argparse` subcommands):
 - Each check is a function returning `(ok, detail, fix_hint)`; mockable, so I can unit-test the logic here with pytest (fake `vswhere`, fake driver) before it touches your machine.
 - `subprocess.run(check=True)` fails loudly; paths via `pathlib`; no quoting traps.
 - VS environment capture is a well-trodden pattern: `vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`, then `cmd /c "VsDevCmd.bat -arch=amd64 && set"` merged into the child environment. (setuptools already does this for `cl.exe`; hipcc/clang-cl also needs `INCLUDE`/`LIB`.)
-- **uv** (single exe) as env manager: `uv python install 3.12`, `uv venv`, `uv pip install`. It brings its own Python, so nothing touches the system Python or PATH, which is the "venv, don't fight paths" requirement. Bootstrap is two lines: `winget install astral-sh.uv`, then `uv run --no-project scripts/windows/kyojin_win.py doctor`.
+- **uv** (single exe) as env manager: `uv python install 3.12`, `uv venv`, `uv pip install`. It brings its own Python, so nothing touches the system Python or PATH, which is the "venv, don't fight paths" requirement. Bootstrap is two lines: `winget install astral-sh.uv`, then `uv run --no-project python scripts/windows/kyojin_win.py doctor`.
 - Task-runner layers (nox, invoke, doit) are not worth it for five subcommands.
 
 ### 6.2 Shape
@@ -142,7 +142,7 @@ Serve Qwen (decision 1) with a small pack so RAM stays free for the compiler. Re
 - Build-only job is feasible on `windows-2022`: no GPU needed to compile `--offload-arch=gfx1151`. Reuse the upstream pattern (`windows_smoke` target, pwsh, uv, VS pin, sccache). **[I]**
 - Constraint: free runner disk (about 14 GB free on C:) versus a 12 GB SDK plus torch. May need the larger-runner tier or aggressive cleanup / D: drive. **[?]**
 - Cannot run tests on hosted runners (no GPU). Wheel is a build-validation artifact; runtime validation stays manual on your machine.
-- Kyojin `build.yml` has no ROCm or Windows-ROCm job today; add as new `target: windows_rocm_smoke`. Promote only after the local script passes. With the Python orchestrator, CI just calls `uv run --no-project scripts/windows/kyojin_win.py build`, so local and CI share one code path.
+- Kyojin `build.yml` has no ROCm or Windows-ROCm job today; add as new `target: windows_rocm_smoke`. Promote only after the local script passes. With the Python orchestrator, CI just calls `uv run --no-project python scripts/windows/kyojin_win.py build`, so local and CI share one code path.
 
 ## 7b. Prior art (reuse, do not rebuild)
 

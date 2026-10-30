@@ -96,7 +96,9 @@ Preflight checks, each with a one-line fix hint:
 9. `hipcc.exe --version` runs from `rocm-sdk path --root`; `hipsparse/` and `thrust/` headers present (same check as `build.sh`).
 10. `import triton` works and a trivial `@triton.jit` kernel runs on the GPU (needs `clang-cl` from the ROCm SDK, found automatically per triton-windows).
 
-## 6. Build tooling choice and POC shape (not started)
+## 6. Build tooling choice and POC shape
+
+Status: `scripts/windows/kyojin_win.py` and `test_kyojin_win.py` written and unit-tested on Linux (19 tests); `doctor` dry-run on Linux works end to end. Never run on Windows. `setup.py` Windows+HIP edits made. Not committed.
 
 ### 6.1 PowerShell vs Python
 
@@ -146,8 +148,27 @@ Serve Qwen (decision 1) with a small pack so RAM stays free for the compiler. Re
 - **AMD docs, Windows PyTorch**: [Radeon/Ryzen install page](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installryz/windows/install-pytorch.html) and [ROCm 7.9.0 PyTorch guide](https://rocm.docs.amd.com/en/docs-7.9.0/install/pytorch-comfyui.html): stable (non-nightly) wheels from `repo.amd.com/rocm/whl/gfx1151/`, driver minimum, Python 3.12. Fallback if nightlies break; Kyojin is verified only on nightlies.
 - **triton-windows**, [triton-lang/triton-windows](https://github.com/triton-lang/triton-windows): RDNA3.5 supported, clang-cl from the TheRock wheel, `pip install "triton-windows<3.9"`. Do not build Triton ourselves.
 - **Upstream exllamav3 CI**: VS Build Tools pin, `windows-2022`, sccache, `windows_smoke` target. Reuse the shape for the CI job.
-- **Community PowerShell gist**, [kundeng](https://gist.github.com/kundeng/7ae987bc1a6dfdf75175f9c0f0af9711): uv + Python 3.12 venv + GPU smoke test is the right idea, but it pins ROCm 6.5.0rc wheels for gfx110x, never checks gfx1151 or VS Build Tools, and has the exit-code gaps noted in 6.1. Borrow the uv pattern only.
+- **Community PowerShell gist**, [kundeng](https://gist.github.com/kundeng/7ae987bc1a6dfdf75175f9c0f0af9711): uv + Python 3.12 venv + GPU smoke test is the right idea, but it pins ROCm 6.5.0rc wheels for gfx110x, never checks gfx1151 or VS Build Tools, and has the exit-code gaps noted in 6.1. Ideas only (uv-managed Python 3.12 venv + GPU smoke test); no code is used, and no licence was found for the gist, so none may be copied.
 - **Not found**: any public guide to building PyTorch C++/HIP extensions with hipcc on Windows. We are on our own for build step 3, so it is the first thing to test.
+
+## 7c. Sources and licences
+
+Rule for this port: copy no third-party code unless its licence is recorded here with the copied lines. Nothing below was copied; "used" means a documented command, flag or fact was followed, or a tool is invoked.
+
+| Source | Licence (checked) | How it was used |
+|---|---|---|
+| Kyojin (this repo): `tools/strix_halo/env.sh`, `rebuild.sh`, `setup.py` | MIT, (c) 2025 Turboderp (`LICENSE`) | Read. `kyojin_win.py` re-implements the build-time ROCm variables and the `EXL3_HIP_DEFINES` default for a Windows SDK layout. `setup.py` edited in place. |
+| Upstream exllamav3 v1.6.5: `setup.py`, `ext.py`, `build.yml` | MIT, (c) 2025 Turboderp | Read. Only borrowed fact: link `hipblas` instead of `cublas` for ROCm (one line in `setup.py`, same project lineage). MSVC discovery and CI shape are described, not copied. |
+| PyTorch `torch/utils/cpp_extension.py` (2.15.0a0+rocm10.1.0a20260822 Windows wheel) | BSD-3-Clause (PyTorch; licence file not re-read, standard for the project) | Read in a scratch dir outside the repo to confirm HIP-on-Windows code paths. Not copied. |
+| ROCm TheRock `RELEASES.md` | MIT, (c) AMD (`LICENSE` fetched) | Documented install pattern followed (`torch[device-gfx1151]`, `rocm-sdk init/test/path`). |
+| triton-lang/triton-windows | `LICENSE` fetched: MIT-style header (Tillet, OpenAI) | Runtime dependency from PyPI only. Support claims from its README and releases page. |
+| astral-sh/uv | MIT (`LICENSE-MIT` fetched; dual MIT/Apache-2.0) | Tool invoked. |
+| Microsoft `vswhere.exe`, `VsDevCmd.bat` | Microsoft tools, not redistributed | Invoked from the user's own Visual Studio install; documented usage only. |
+| AMD docs (Radeon/Ryzen Windows PyTorch, ROCm 7.9.0) | Documentation | Read for the stable-wheel fallback index. |
+| Community gist (kundeng) | **No licence identified** (could not retrieve metadata) | Ideas only. No code reused. |
+| Third-party web pages from search results (for example a "Claude skill" guide for Strix Halo) | Unknown | Not relied on. |
+
+Verification status: AMD index contents and the torch wheel `METADATA` were read directly over HTTP from a Linux sandbox. Hugging Face was unreachable from the sandbox (proxy 403 at every check), so model repo names remain unconfirmed.
 
 ## 8. Risk ranking
 

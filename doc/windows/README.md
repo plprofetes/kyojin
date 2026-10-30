@@ -40,7 +40,7 @@ Tasks inside a sprint are in **priority order: hardest and most uncertain first*
 |---|---|---|---|
 | S0 Sprint 0: assessment and tooling (done) | no tasks yet | 0/0 | [s0-assess-and-tooling](sprints/s0-assess-and-tooling/README.md) |
 | S1 Sprint 1: risk spikes (fail fast) | in progress | 0/5 | [s1-risk-spikes](sprints/s1-risk-spikes/README.md) |
-| S2 Sprint 2: the full extension builds and imports | todo | 0/3 | [s2-extension-builds](sprints/s2-extension-builds/README.md) |
+| S2 Sprint 2: the full extension builds and imports | in progress | 2/3 | [s2-extension-builds](sprints/s2-extension-builds/README.md) |
 | S3 Sprint 3: runtime kernels run | todo | 0/5 | [s3-runtime-kernels](sprints/s3-runtime-kernels/README.md) |
 | S4 Sprint 4: serve a small Qwen over HTTP | todo | 0/5 | [s4-serve-qwen](sprints/s4-serve-qwen/README.md) |
 | S5 Sprint 5: harden and publish the path | todo | 0/5 | [s5-harden](sprints/s5-harden/README.md) |

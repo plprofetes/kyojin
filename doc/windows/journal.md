@@ -96,3 +96,9 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - The extension imports once torch is loaded (`import torch, exllamav3_ext` OK). `import exllamav3` then failed at `exllamav3/tokenizer/tokenizer.py:4` **[V]**: the venv has **tokenizers 1.0.0-rc.3** (a flat `tokenizers.pyd`, no `models`/`decoders` subpackages) **[V: directory listing]**. `requirements.txt` says `>=0.21.1`; why uv chose the pre-release is not established (the requirements step passes no `--prerelease`) **[?]**. PyPI has 0.23.3 (cp310-abi3 win_amd64 wheel, the version in `uv.lock`).
 - Fix: `setup` pins `tokenizers==0.23.3` next to the triton pin (`TOKENIZERS_SPEC`, env `KYOJIN_TOKENIZERS_SPEC`), recorded in `env.json` pins and assessment 7d. Signature `tokenizers-rc`. The repo's own `requirements.txt` is untouched (Linux).
 - Immediate repair without `setup`: `uv pip install --no-config --python .venv-win\Scripts\python.exe tokenizers==0.23.3`. Other dependencies may have drifted the same way; compare `pip-freeze.txt` with `uv.lock` (deferred check).
+
+## 2026-10-30: `check` all green (S2-01, S2-02 done)
+
+- After pinning `tokenizers==0.23.3`: `check` `20261030-233000-check` PASS=4 (rocm_sdk, torch_gpu 16 GiB single allocation + matmul on all BLAS backends, triton 3.9.0, extension 135 symbols + `import exllamav3`) **[V]**. The Windows build of the extension and its import work on gfx1151; GPU kernels have not been exercised yet.
+- Pinning: the rest of `requirements.txt` is still `>=`; user wants strict pins. Plan: constraints file from a known-good `pip freeze` of this venv (next entry).
+- **Next:** pin from the freeze (below); `fla_standalone_test.py` (S1-03); then S3-01 smoke (one real kernel call).

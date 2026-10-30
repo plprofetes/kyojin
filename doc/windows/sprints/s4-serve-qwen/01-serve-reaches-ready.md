@@ -9,6 +9,7 @@ Sprint: [Sprint 4: serve a small Qwen over HTTP](README.md) · ID S4-01 · prior
 **Goal.** READY line printed.
 
 **Steps.**
+0. Saved patches: [startup_health](../../review/patches/tools_startup_health_py.patch) (`register_at_fork`, port reuse) and [serve.py UTF-8](../../review/patches/tools_qwen_serve_py.patch). `tools/qwen` symlinks must be real files (`doctor` symlinks check).
 1. `kyojin_win.py -v serve --model <dir>`; fix start-up failures (Linux-only `/proc`, `/sys`, `os.sysconf`, `~/cache` paths, `swap_in_process`).
 2. Guard, do not delete, Linux behaviour; each guard is `sys.platform`/`os.name` based.
 3. Check the path of `--slot-save-path` and other defaults under `~`.

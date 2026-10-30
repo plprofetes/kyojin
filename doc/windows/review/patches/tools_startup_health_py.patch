@@ -1,0 +1,24 @@
+diff --git a/tools/startup_health.py b/tools/startup_health.py
+index 7062361..e6b4aa1 100644
+--- a/tools/startup_health.py
++++ b/tools/startup_health.py
+@@ -258,7 +258,8 @@ class _EarlyServer:
+ 
+         class Server(ThreadingHTTPServer):
+             daemon_threads = True
+-            allow_reuse_address = True
++            # SO_REUSEADDR on Windows lets a second process bind the same port (no "port taken" error); off there
++            allow_reuse_address = os.name != "nt"
+             request_queue_size = 128   # clients arriving during the hand-off wait in this backlog
+ 
+         self.httpd = Server((host, port), Handler)
+@@ -266,7 +267,8 @@ class _EarlyServer:
+         # A fork-without-exec child would keep the listening socket open after close() and block the real bind.
+         sock = self.httpd.socket
+         self._owned = True
+-        os.register_at_fork(after_in_child=lambda: sock.close() if self._owned else None)
++        if hasattr(os, "register_at_fork"):   # POSIX only; Windows has no fork
++            os.register_at_fork(after_in_child=lambda: sock.close() if self._owned else None)
+         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True, name="startup-health")
+         self.thread.start()
+ 

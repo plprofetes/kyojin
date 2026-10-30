@@ -47,6 +47,14 @@ Fresh-eyes review of [assessment.md](../assessment.md), the sprint plan and the 
 
 One batched session, one zip of `logs\windows\*` plus a pasted `SUMMARY.txt` of at most 80 lines (commit and dirty count; Windows build, driver, VS, uv, Python; torch/HIP/arch/`mem_get_info`; SDK root and `bin\*.exe`, `lib\*.lib` listing; Triton version and compiler; per-step PASS/FAIL with seconds; first error block per failure; de-duplicated `ninja -k 0` errors per TU). Logs over 1 MB are trimmed to head 100, tail 200 and +-10 lines around matches; raw logs stay in the zip. Assistant answers: one copy-paste block, the expected output, then "send back: X". Adopting this needs a small change to `kyojin_win.py` (write `SUMMARY.txt`), which is an edit to an existing script.
 
-## Open items after round 1
+## Round 2 (deliverables and what was done)
 
-Round 2 (patches, standalone FLA test, clang-cl hello extension recipe, `long` audit, TDR notes, exact tool messages for the catalogue) is tracked in [../journal.md](../journal.md).
+- Patches: [review/patches/README.md](patches/README.md) (4 applied, 3 saved for S3/S4).
+- Hello extension recipe with clang-cl and the `ninja -k 0` recipe: [hello_ext_clangcl.md](hello_ext_clangcl.md). `kyojin_win build` now follows it (`setup.py build_ext --inplace`, then `ninja -k 0` on failure).
+- `long` audit: [long_audit.md](long_audit.md): no `long` arithmetic on the Qwen3.5-9B dense path; watch list for MoE/DS41 later.
+- TDR: [tdr.md](tdr.md): registry values and detection; the CPU-MoE handoff wait kernels (up to about 30 s) will certainly trip it, the 9B probably not.
+- Error catalogue: [error_catalogue.md](error_catalogue.md) was applied to `KNOWN` in `kyojin_win.py` (34 signatures, each with a sample test; dropped `msvc-flag-on-clang`, `triton-compiler`, `device-libs`).
+- New finding (verified by the reviewer in torch's code): `build` would have failed at once without `DISTUTILS_USE_SDK=1` after VsDevCmd; fixed.
+- Reviewer's concession: the triton-windows `readme` branch (`7b92538`) does list RDNA3.5/Strix Halo. Its compatibility table pairs torch 2.15 with Triton 3.9, so the default pin changed to `triton-windows==3.9.0.post30` (fallback 3.8.0.post29).
+- Draft awaiting consent: [drafts/](drafts/README.md) (standalone FLA Triton test).
+- Not verified by anyone: exact cl.exe error codes, whether `hipblas.lib`/`rocblas.lib` exist in the devel tree, HIP error text after a TDR, Event ID 4101 (common knowledge).

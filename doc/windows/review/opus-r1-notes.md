@@ -93,3 +93,58 @@ Method for wheel contents: HTTP range reads of the zip central directory (/tmp/c
 - Listing rocm_sdk_devel _devel.tar contents remotely: not attempted (1.4 GB tar inside zip; needs sequential header scan).
 - Hugging Face: not tried (known proxy 403).
 - No web source found on whether torch.cuda.mem_get_info on Windows reports VGM dedicated only or dedicated+shared.
+
+## Round 2 additions (2026-10-30)
+
+Repo HEAD moved to c4a9f87 (docs + kyojin_win.py only vs cca1e17; `git diff --stat cca1e17 c4a9f87`).
+
+- [V] CORRECTION: triton-windows Windows README is on branch `readme` (7b92538b1b8355d9fa290fceec536aeb016986f5),
+  https://raw.githubusercontent.com/triton-lang/triton-windows/readme/README.md (sha256 1b0a9241...). Lines 33-36:
+  RDNA4/RDNA3.5 (gfx115x, Strix Halo)/RDNA3/RDNA2 "Yes"; dtype table line 57 RDNA3.5: fp16 Y, bf16 Y, fp8 N, fp4 N,
+  int8/int4 "*" (int8 matrix core only 1x fp16, line 68). Line 121: "For AMD GPU, you may install ROCm and PyTorch from
+  TheRock". Line 210: "clang-cl (with MSVCRT) is supported with the AMD backend"; TinyCC bundled since post13 (best effort).
+  No gfx1151-specific note. PyTorch/Triton table (lines ~100-118): torch 2.14 <-> Triton 3.8, **torch 2.15 <-> Triton 3.9**.
+  So the pin torch 2.15.0a0 + triton-windows 3.8 is outside their guarantee (it matters for torch.compile/inductor, which
+  Kyojin does not rely on for serving [I]).
+- [V] Tags: v3.8.0-windows.post29 = 143426c4cbead9d3baf826b017ce1d3da5e51d3c (= release/3.8.x-windows head);
+  v3.8.0-windows.post28 = 52618811; v3.9.0-windows.post30 = 26a4654c314a781f18c33dc32e519f89f9e12798.
+  GitHub release-notes pages/API are blocked (403); read the commit log instead (bare blob-less clone of
+  release/3.8.x-windows). post28..post29: 827c438c "Fix MAX_JOBS on Windows in setup.py", 143426c4 "Catch LLVM errors
+  for both Nvidia and AMD, and filter remarks". AMD Windows history in 3.8.x: 01ea9a80 "Add Windows/clang-cl support for
+  AMD HIP backend", cd732653 "Find clang-cl.exe from TheRock wheels (#10)", d42dbabc "Fix and skip a number of tests that
+  were failing/unsupported on RDNA3 (#12)", 191eed18 "Accept versioned amdhip64 DLL names in TRITON_LIBHIP_PATH (#20)",
+  7feb4df8 "Fix HIP runtime DLL context sharing on Windows (#23)" (LoadLibraryA loaded a second HIP DLL instance =
+  separate HIP context; fixed with GetModuleHandleA first), e9eb07fc "Fix RDNA DPP bound control", e520c2e3/602b6073
+  "TheRock ROCm requires importing torch before triton", 287f1e02 "Enable all unit tests in AMD CI workflow; skip
+  cooperative launch on AMD". post29..post30 adds 26a4654c3 "Pack WMMA operands to fix unnecessary VGPR with true16 on
+  gfx11/12 (#57)" (this is the "VGPR fix" the plan mentions: VERIFIED), a71338429 "Use both TheRock and bundled ROCm
+  include dirs, because currently TheRock ROCm wheels do not supply roctracer.h".
+- [V] (coordinator-confirmed) TheRock build_prod_wheels.py @682b3407528d7ee817a7bf092941070b50755ed7 lines 701-706
+  HIP_CLANG_PATH/CC/CXX=clang-cl; DISTUTILS_USE_SDK=1 at 1204/1347/1391. Raw URLs need the full SHA (short SHA 404s).
+- [V] torch cpp_extension.py:1333-1346 `_check_abi` raises UserWarning when VSCMD_ARG_TGT_ARCH is set and
+  DISTUTILS_USE_SDK is not -> kyojin_win `build` (VsDevCmd env, no DISTUTILS_USE_SDK at c4a9f87) fails at once.
+- [V] cpp_extension.py:2884-2925 `_run_ninja_build`: `ninja -v -j MAX_JOBS`; if VSCMD_ARG_TGT_ARCH unset it activates
+  the VC env itself via _get_vc_env; shell=True for HIP on Windows.
+- [V] cpp_extension.py:882-889: host std flag is `/std:c++20` (function named append_std17...).
+- [V] triton-windows runtime/build.py:28-55: C compiler order = CC env, _rocm_sdk_core clang-cl, MSVC from VS env, bundled
+  tcc, then cl/gcc/clang on PATH; "Failed to find C compiler" is unreachable when tcc is bundled.
+- [V] clang-cl adds `-fdiagnostics-format msvc` (llvm c7a69e6 Clang.cpp:9135-9137, AddClangCLArgs at 8948);
+  hipcc->clang.exe uses GNU format. `-fms-runtime-lib=` has CLOption visibility (Options.td:3690); `/Zc:` is in the
+  unsupported-CL list (`_SLASH_Zc : CLJoined<"Zc:">`, Options.td:9977); `-W...` has CLOption visibility (Options.td:948).
+- [V] ROCm/llvm-project c3cd044 DiagnosticDriverKinds.td:71-78 (no ROCm device library / no HIP runtime), :348-352
+  (unknown argument; clang-cl variant is a warning "unknown argument ignored in clang-cl").
+- [V] ninja 3ccb2270e8ef5a84bb31c4651c0df84440f30362: status_printer.cc:244 `FAILED: [code=N] <outputs>`; build.cc:838-840
+  "subcommand failed" / "cannot make progress due to previous errors"; ninja.cc:1793 "build stopped: %s.".
+- [V] MicrosoftDocs/windows-driver-docs staging b1f6aa5c1275777b7b4be30c4bbff86dc614e0b0:
+  display/tdr-registry-keys.md (TdrLevel/TdrDelay default 2/TdrDdiDelay default 5/TdrLimitTime 60/TdrLimitCount 5,
+  REG_DWORD under HKLM\System\CurrentControlSet\Control\GraphicsDrivers), display/timeout-detection-and-recovery.md.
+  Dead end: learn.microsoft.com blocked (DNS/proxy 403); raw GitHub copy works.
+- [V] Python HOME convention: model/dense_warmup.py:36, util/tune_cache.py:34,116, util/kernel_seed.py:41 all use
+  HOME else "/tmp"; quant/coop_autotune.cu:94 already uses USERPROFILE (excluded from ROCm build). hgemm patch keeps HOME.
+- [V] Qwen-path `long` audit: 0 arithmetic uses (long_audit.md). quant/exl3_gemv_kernel.cuh grid.sync is CUDA-only
+  (lines 27-29, 277-295); hc_mix.cu:785 "no-grid-sync".
+- [V] Patch checks: all 7 patches `git apply --check` clean on c4a9f87; hip_lib tests 11/11 pass (uv, Python 3.12,
+  pytest, outside tests/conftest.py); kyojin_win tests 25/25 pass with the sdk_env patch.
+- Dead end: validating fla_standalone_test's reference numerically on CPU needs torch; download.pytorch.org is blocked
+  (tunnel 403) and PyPI torch pulls the CUDA stack. The reference was checked by inspection against
+  tests/test_gated_delta_rule.py::_torch_gated_delta_rule (same decay/delta/update/output order).

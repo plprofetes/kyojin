@@ -23,3 +23,10 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - Round 2 requested from the reviewer: Windows-gated patches (kept in /tmp, not applied), standalone FLA test, clang-cl hello-extension recipe, `long` audit, TDR notes, exact tool messages for the error catalogue. **Next:** review those, ask the user for consent before adding any new file to the repo.
 
 - User decision: WSL2 is not a fallback path (Linux binaries, busy-poll GPU bridge, wrong performance picture); native Windows build and performance are the goal. WSL2 is a diagnostic at most.
+
+## 2026-10-30: review round 2 applied
+
+- Applied build-critical fixes (unverified on Windows): `setup.py` links hipblas+rocblas; `ext.py` raises a clear ImportError instead of a doomed JIT build; `hgemm.cu` `_mkdir`; `kyojin_win` environment (DISTUTILS_USE_SDK, clang-cl as CC/CXX, HOME, PYTHONUTF8); `build` now `setup.py build_ext --inplace` plus `ninja -k 0` on failure. Saved (not applied) patches for S3/S4 in `review/patches/`.
+- `KNOWN` rebuilt from the reviewer's expected tool messages (34 signatures, 26 tests); `doctor` checks the tools/qwen symlinks; the script refuses to run from the repo `.venv`.
+- Triton pin now `triton-windows==3.9.0.post30` (fallback `3.8.0.post29`).
+- **Needs user consent:** adding `fla_standalone_test.py` (draft in `review/drafts/`). **Next:** S1-01 on the Windows machine.

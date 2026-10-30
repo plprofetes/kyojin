@@ -11,7 +11,7 @@ Sprint: [Sprint 1: risk spikes (fail fast)](README.md) · ID S1-02 · priority o
 **Steps.**
 No new repo files or scripts. Everything lives in the gitignored scratch folder `logs\windows\scratch\hello_ext` (cleanup: delete `logs\windows\scratch`).
 
-1. Open a VS developer shell (`"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"` finds the install; run its `Common7\Tools\VsDevCmd.bat -arch=amd64`, or use "x64 Native Tools Command Prompt"). From the repo root:
+1. Follow [hello_ext_clangcl.md](../../review/hello_ext_clangcl.md) for the exact cmd.exe sequence and the expected `build.log` (it is the reviewed version of the commands below, including `HOME`, `PYTHONUTF8` and where `build.ninja` lives). Open a VS developer shell (`"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"` finds the install; run its `Common7\Tools\VsDevCmd.bat -arch=amd64`, or use "x64 Native Tools Command Prompt"). From the repo root:
    ```bat
    .venv-win\Scripts\activate
    for /f "delims=" %i in ('rocm-sdk path --root') do set ROCM_HOME=%i

@@ -181,7 +181,7 @@ Verification status: AMD index contents and the torch wheel `METADATA` were read
 | torch (Windows, cp312) | `2.15.0a0+rocm10.1.0a20260822` | AMD index; Linux-verified Kyojin pin is `2.14.0+rocm10.1.0a20260822` |
 | rocm, rocm-sdk-core/devel, amd-torch-device-gfx1151 | `10.1.0a20260822` (device wheel: torch version) | AMD index, METADATA read directly |
 | AMD index | `https://rocm.nightlies.amd.com/whl-multi-arch/` (TheRock documents `https://nightly.repo.amd.com/rocm/whl-next/`; equivalence unverified) | |
-| triton-windows | spec `<3.9`; latest on PyPI at review time `3.9.0.post30` (released 28 Oct); Linux Kyojin pin is triton `3.8.0` | PyPI, github.com/triton-lang/triton-windows releases |
+| triton-windows | exact pin `==3.9.0.post30` (commit `26a4654c`, released 28 Oct; torch 2.15 pairs with Triton 3.9 in its README table); fallback `==3.8.0.post29` (`143426c4`); Linux Kyojin pin is triton `3.8.0` | PyPI, github.com/triton-lang/triton-windows releases |
 | TheRock docs read | `main` branch RELEASES.md on 2026-10-30; commit SHA not captured | github.com/ROCm/TheRock |
 | uv | any recent; version is logged in each run (`uv --version` probe) | |
 | Python | 3.12 (uv-managed) | |

@@ -158,7 +158,7 @@ def check(docs: Path = DOCS) -> list[str]:
             problems.append(f"{t.id}: missing '- Risk:' line (why it is ordered here)")
     for f in sorted(docs.rglob("*.md")):
         for target in LINK.findall(f.read_text(encoding="utf-8")):
-            if re.match(r"^[a-z]+:", target) or target.startswith("#"):
+            if re.match(r"^[a-z]+:", target) or target.startswith("#") or "\\" in target or "|" in target:   # URLs, anchors, regex text
                 continue
             path = target.split("#", 1)[0]
             if path and not (f.parent / path).resolve().exists():

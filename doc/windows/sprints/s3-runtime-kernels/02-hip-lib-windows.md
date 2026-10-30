@@ -9,6 +9,7 @@ Sprint: [Sprint 3: runtime kernels run](README.md) · ID S3-02 · priority order
 **Goal.** `load_hip_runtime()` returns a working handle on Windows.
 
 **Steps.**
+0. A reviewed patch is saved: [hip_lib_windows.patch](../../review/patches/hip_lib_windows.patch) (Windows branch returning the `amdhip64*.dll` torch already loaded, 4 unit tests). Apply it with `git apply`, then verify on Windows.
 1. Find the real DLL name and location from `doctor` (`rocm_sdk` bin_listing; expected `amdhip64*.dll` [?]).
 2. Add a Windows branch (search torch lib dir and the SDK bin dir, skip `/proc`); keep the Linux path untouched.
 3. Add a unit test with injected directory listings (the function already takes `lib_dir` and `read_maps`).

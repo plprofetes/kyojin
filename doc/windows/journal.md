@@ -118,3 +118,8 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 
 - The user's `uv pip install -c constraints-win.txt pydantic pydantic-core safetensors` failed: stable `pydantic==2.14.0` needs `typing-extensions>=4.16.0`, the freeze had 4.15.0 (matching the beta) **[V: uv error, reproduced here]**. My error: I had checked wheel availability but not that the set resolves. Fix: `typing-extensions==4.16.0` (the `uv.lock` version). Verified with `uv pip compile --python-platform windows --python-version 3.12 -c constraints-win.txt` over `requirements.txt` (minus torch) + `triton-windows==3.9.0.post30`: resolves, every resolved package is pinned, no version differs. The header of the file now records this command (rule: re-run it after every edit).
 - Not covered by that check: torch's own dependencies on the AMD index (`sympy`, `networkx`, `mpmath` are pinned but were not part of the compile) **[?]**.
+
+## 2026-10-30: constraints applied on the target; model download started
+
+- The corrected `constraints-win.txt` installed cleanly in the existing venv (`uv pip install -c ... pydantic pydantic-core safetensors typing-extensions`) **[V: user report]**; a follow-up `check` result was not reported. Pre-releases pydantic 2.14.0b1 / safetensors 0.9.0rc1 are gone from the venv.
+- Model: `turboderp/Qwen3.5-9B-exl3`, branch **`4.00bpw`** (not `4.0bpw`; the branch exists, given by the user's URL), downloaded with `.venv-win\Scripts\hf.exe download ... --revision 4.00bpw --local-dir C:\models\qwen35-9b-4bpw` (the `hf` CLI ships in the venv via huggingface-hub 2.4.0). File list and size still to be recorded.

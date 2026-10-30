@@ -25,6 +25,7 @@ Tasks inside a sprint are in **priority order: hardest and most uncertain first*
 | Item | File |
 |---|---|
 | Background, upstream comparison, Linux-only inventory, risks, licences | [assessment.md](assessment.md) |
+| Independent review (Opus 5.5), findings and verification | [review/opus-r1.md](review/opus-r1.md), evidence [review/opus-r1-notes.md](review/opus-r1-notes.md) |
 | Things we are deliberately not doing, error catalogue process | [deferred.md](deferred.md) |
 | Session journal (append-only) | [journal.md](journal.md) |
 | Sprint folders (goal, exit criteria, task files) | [sprints/](sprints/) |

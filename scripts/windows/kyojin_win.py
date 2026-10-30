@@ -761,9 +761,15 @@ def probe_vs(run: Run) -> Check:
     return Check("visual_studio", PASS, f"{inst.get('displayName')} {inst.get('installationVersion')}; SDK {sdks[-1]}", d)
 
 
+def vsdevcmd_cmd(vsdev: Path) -> list[str]:
+    """cmd line that prints the environment after VsDevCmd. Separate argv items on purpose: Python's list2cmdline would
+    turn one string containing quotes into `\\"`, which cmd does not unescape, so `call` failed and `&& set` never ran [V]."""
+    return ["cmd", "/c", "call", str(vsdev), "-arch=amd64", "-host_arch=amd64", ">nul", "2>&1", "&&", "set"]
+
+
 def capture_vs_env(run: Run, vsdev: Path) -> dict[str, str]:
-    """Environment after `VsDevCmd.bat -arch=amd64`: INCLUDE/LIB/PATH for cl, clang-cl and hipcc."""
-    r = run.run(["cmd", "/c", f'call "{vsdev}" -arch=amd64 -host_arch=amd64 >nul 2>&1 && set'], "vsdevcmd-env", timeout=120, stream=False)
+    """Environment after `VsDevCmd.bat -arch=amd64`: INCLUDE/LIB/PATH for cl, clang-cl, hipcc and link.exe."""
+    r = run.run(vsdevcmd_cmd(vsdev), "vsdevcmd-env", timeout=120, stream=False)
     parsed = parse_set_output(r.out)
     diff = env_diff(dict(os.environ), parsed)
     log.debug("    VsDevCmd changed/added %d variables: %s", len(diff), sorted(diff))
@@ -1131,6 +1137,10 @@ def cmd_build(run: Run, args) -> int:
     if vs.status == FAIL or sdk.status == FAIL:
         return run.summary()
     env = capture_vs_env(run, Path(vs.details["VsDevCmd"]))
+    if not {"INCLUDE", "LIB"} <= {k.upper() for k in env} or "MSVC" not in env.get("PATH", "").upper():
+        run.add(Check("vs_env", FAIL, "VsDevCmd.bat did not produce INCLUDE/LIB/MSVC PATH entries", {"VsDevCmd": vs.details["VsDevCmd"]},
+                      "read the vsdevcmd-env log in the run folder; run `\"<VsDevCmd.bat>\" -arch=amd64 -host_arch=amd64` by hand in cmd.exe"))
+        return run.summary()
     root = Path(sdk.details["root"])
     env = sdk_env(root, env)
     # torch's BuildExtension runs `ninja --version` and silently falls back to the serial distutils path (which passes

@@ -20,6 +20,7 @@ Sprint: [Sprint 2: the full extension builds and imports](README.md) · ID S2-02
 
 **Evidence.** (run folders, versions, numbers; fill in)
 
+- 2026-10-30: S2-01 link green (clang_rt.builtins fix). First `extension` probe: `ImportError: DLL load failed while importing exllamav3_ext` (the probe imported the extension BEFORE torch, so the ROCm/torch DLLs were not loaded yet) **[I]**. Probe now imports torch first (as `import exllamav3` does); result pending a re-run of `check`.
 - 
 
 **Links.** [extension probe](../../../../scripts/windows/kyojin_win.py) · [exllamav3 __init__](../../../../exllamav3/__init__.py) · next: [S2-03](03-linux-no-regression.md)

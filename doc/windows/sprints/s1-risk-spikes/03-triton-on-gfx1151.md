@@ -10,7 +10,7 @@ Sprint: [Sprint 1: risk spikes (fail fast)](README.md) · ID S1-03 · priority o
 
 **Steps.**
 1. `kyojin_win.py check` and read the `triton` probe (vector add).
-2. Pick one small Kyojin Triton kernel on the Qwen path (candidates: [l2norm](../../../../exllamav3/vendor/fla/l2norm.py), [cumsum](../../../../exllamav3/vendor/fla/cumsum.py)); write a script comparing it with a torch reference in fp16.
+2. Test a real Kyojin kernel WITHOUT importing `exllamav3` (that would start the 72-file JIT build and fail on Windows, see [review #6](../../review/opus-r1.md)): put `exllamav3\vendor` on `sys.path` and `import fla`; its modules import nothing from exllamav3 at module level. A standalone chunk-kernel-vs-naive-recurrence test is being drafted in review round 2; adding it to the repo needs the user's consent.
 3. If it fails, try the other triton-windows pin: `KYOJIN_TRITON_SPEC='triton-windows<3.10'` (3.9.0.post30 includes a VGPR fix for RDNA3.5), then `setup` again.
 4. Note which C compiler Triton picked (clang-cl from the SDK vs MSVC) in the journal.
 

@@ -123,3 +123,10 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 
 - The corrected `constraints-win.txt` installed cleanly in the existing venv (`uv pip install -c ... pydantic pydantic-core safetensors typing-extensions`) **[V: user report]**; a follow-up `check` result was not reported. Pre-releases pydantic 2.14.0b1 / safetensors 0.9.0rc1 are gone from the venv.
 - Model: `turboderp/Qwen3.5-9B-exl3`, branch **`4.00bpw`** (not `4.0bpw`; the branch exists, given by the user's URL), downloaded with `.venv-win\Scripts\hf.exe download ... --revision 4.00bpw --local-dir C:\models\qwen35-9b-4bpw` (the `hf` CLI ships in the venv via huggingface-hub 2.4.0). File list and size still to be recorded.
+
+## 2026-10-30: first `serve` run: `os.register_at_fork` (S4-01)
+
+- Pack `turboderp/Qwen3.5-9B-exl3` @ `4.00bpw` is on disk: one `model.safetensors` of 7,185,603,988 bytes (6.69 GiB) plus `config.json`, `quantization_config.json`, tokenizer files, `chat_template.jinja`, preprocessor configs; **`generation_config.json` is absent** (the `model_dir` check WARNs; serve falls back to defaults) **[V: dir listing]**.
+- `serve` died in 2 s at `tools/startup_health.py:269`: `AttributeError: module 'os' has no attribute 'register_at_fork'` **[V]**, as predicted by the catalogue. Applied the saved patch (`hasattr` guard; `allow_reuse_address = os.name != "nt"` because SO_REUSEADDR on Windows lets a second process bind the same port). Linux: both conditions evaluate as before **[I]**, not run.
+- Also: `serve` now sets `PYTHONUTF8=1` for the child (cp1250 locale vs `read_text()` without encoding) instead of applying the UTF-8 patch to `tools/qwen/serve.py`.
+- **Next:** `git pull`, fetch `generation_config.json` from the base repo (optional), `serve` again; expect S3-02 (`libamdhip64.so`) next.

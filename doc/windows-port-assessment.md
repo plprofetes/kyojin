@@ -3,6 +3,8 @@
 Status: assessment only, no code changed. Date: 2026-10-30. Rev 2: Triton finding corrected, decisions and tooling added. Kyojin 1.8.3 vs upstream exllamav3 1.6.5.
 Target: one configuration. Windows 11 x64, Strix Halo (gfx1151), latest Adrenalin driver, Python 3.12, ROCm wheels from AMD's pip index.
 
+Deferred items and the sprint plan: [windows-deferred.md](windows-deferred.md).
+
 Legend: **[V]** verified from sources or the AMD wheel index this session; **[I]** inferred, needs a Windows run; **[?]** unknown.
 
 ## 1. Verdict
@@ -98,7 +100,7 @@ Preflight checks, each with a one-line fix hint:
 
 ## 6. Build tooling choice and POC shape
 
-Status: `scripts/windows/kyojin_win.py` and `test_kyojin_win.py` written and unit-tested on Linux (19 tests); `doctor` dry-run on Linux works end to end. Never run on Windows. `setup.py` Windows+HIP edits made. Not committed.
+Status: `scripts/windows/kyojin_win.py` and `test_kyojin_win.py` written and unit-tested on Linux (25 tests); `doctor` dry-run on Linux works end to end. Never run on Windows. `setup.py` Windows+HIP edits made. Not committed.
 
 ### 6.1 PowerShell vs Python
 

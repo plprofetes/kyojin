@@ -136,7 +136,16 @@ class Run:
 
     def snapshot_env(self, env: dict[str, str] | None = None, name: str = "env.json"):
         env = dict(os.environ if env is None else env)
+        def git(*args):
+            try:
+                return subprocess.run(["git", "-C", str(REPO), *args], capture_output=True, text=True, timeout=20).stdout.strip()
+            except (OSError, subprocess.SubprocessError):
+                return "unknown"
+        sha, dirty = git("rev-parse", "HEAD"), len(git("status", "--porcelain").splitlines())
+        log.info("repo commit %s (%d uncommitted paths)", sha[:12] or "unknown", dirty)
         data = {
+            "repo_commit": sha, "repo_uncommitted_paths": dirty,
+            "pins": {"amd_index": AMD_INDEX, "rocm": ROCM_VER, "torch": TORCH_VER, "triton": TRITON_SPEC, "python": PY_VER},
             "argv": sys.argv,
             "cwd": os.getcwd(),
             "python": sys.version,

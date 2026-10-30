@@ -1,6 +1,6 @@
 # Get a small Qwen EXL3 pack on disk (user, parallel)
 
-- Status: todo
+- Status: done
 - Depends: -
 - Risk: LOW difficulty; ordered last because it can happen any time. The candidate repo name is unconfirmed (Hugging Face was unreachable from the assistant's sandbox).
 
@@ -22,5 +22,6 @@ Sprint: [Sprint 1: risk spikes (fail fast)](README.md) · ID S1-05 · priority o
 **Evidence.** (run folders, versions, numbers; fill in)
 
 - 
+- 2026-10-30: `turboderp/Qwen3.5-9B-exl3`, branch `4.00bpw` (the branch name has two zeros), `C:\models\qwen35-9b-4bpw`: `model.safetensors` 7,185,603,988 bytes (6.69 GiB) + `config.json`, `quantization_config.json`, tokenizer files, `chat_template.jinja`, preprocessor configs, LICENSE, README; no `generation_config.json` (the base repo path tried did not have it) and **no `mtp.*` tensors** **[V: dir listing, serve log]**. `serve` loads it and answers.
 
 **Links.** [serve command](../../../../tools/qwen/SERVE.md) · [assessment §6.3](../../assessment.md) · next sprint: [Sprint 2](../s2-extension-builds/README.md)

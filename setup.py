@@ -45,7 +45,11 @@ if windows:
     # No -std flags here: torch's cpp_extension appends its own (unconditionally on the Windows
     # nvcc path), and a second -std argument is a fatal nvcc error, not an override.
     extra_cflags += ["/Ox", "/Zc:preprocessor", "/DWIN32_LEAN_AND_MEAN", "/DNOMINMAX"]
-    extra_cuda_cflags += ["-DWIN32_LEAN_AND_MEAN", "-DNOMINMAX", "-Xcompiler=/Zc:preprocessor"]
+    if torch and torch_version.hip:
+        # hipcc is clang: nvcc's -Xcompiler= does not exist there (host .cpp files still get the cl flags above)
+        extra_cuda_cflags += ["-DWIN32_LEAN_AND_MEAN", "-DNOMINMAX"]
+    else:
+        extra_cuda_cflags += ["-DWIN32_LEAN_AND_MEAN", "-DNOMINMAX", "-Xcompiler=/Zc:preprocessor"]
     if ext_debug:
         extra_cflags += ["/Zi"]
         extra_cuda_cflags += []
@@ -67,7 +71,8 @@ if torch and torch_version.hip:
         extra_cuda_cflags += ["-D" + d]
     # ROCm 7.14 ships clang 22, which treats the deprecated `register` keyword as
     # a hard error in C++17 mode (older ROCm toolchains only warned).
-    extra_cflags += ["-Wno-register"]
+    if not windows:  # cl.exe takes no -Wno-register; hipcc (clang) below does
+        extra_cflags += ["-Wno-register"]
     extra_cuda_cflags += ["-Wno-register"]
     if dev_include := os.environ.get("EXL3_ROCM_DEV_INCLUDE"):
         extra_cflags += ["-I" + dev_include]
@@ -99,7 +104,7 @@ def _host_cxx_has_format():
         return False
 
 
-if torch and torch_version.hip and _host_cxx_has_format():
+if torch and torch_version.hip and not windows and _host_cxx_has_format():
     # HIP's host_defines.h empties __host__/__device__/__noinline__ for host
     # compilation, which breaks libstdc++16's <format> ([[__gnu__::__noinline__]]
     # parses as an empty attribute name). Force <format> to parse first, before
@@ -177,7 +182,8 @@ setup_kwargs = (
                 sources,
                 extra_compile_args=extra_compile_args,
                 include_dirs=[sources_dir],
-                libraries=["cublas"] if windows else [],
+                # Windows needs an explicit import library; on ROCm that is hipBLAS (cf. upstream exllamav3 setup.py)
+                libraries=["hipblas" if torch_version.hip else "cublas"] if windows else [],
             )
         ],
         "cmdclass": {"build_ext": cpp_extension.BuildExtension},

@@ -284,6 +284,15 @@ def parse_set_output(text: str) -> dict[str, str]:
     return env
 
 
+def merge_env(base: dict[str, str], after: dict[str, str]) -> dict[str, str]:
+    """base plus `after` applied case-insensitively onto base's key spelling (no 'Path'/'PATH' duplicates, nothing dropped)."""
+    keys = {k.upper(): k for k in base}
+    out = dict(base)
+    for k, v in after.items():
+        out[keys.get(k.upper(), k)] = v
+    return out
+
+
 def env_diff(before: dict[str, str], after: dict[str, str]) -> dict[str, tuple]:
     ci_before = {k.upper(): (k, v) for k, v in before.items()}
     out = {}
@@ -516,7 +525,11 @@ KNOWN: tuple[Known, ...] = (
           "POSIX-only os.register_at_fork",
           "tools/startup_health.py calls it unconditionally (patch saved in doc/windows/review/patches).",
           "Apply doc/windows/review/patches/tools_startup_health_py.patch (task S4-01)."),
-    Known("hip-lib-windows", r"no libamdhip64\.so or libamdhip64\.so\.<version>",
+    Known("winsock-provider", r"WinError 10106",
+          "Winsock provider failed to load (python cannot import socket/asyncio)",
+          "The child process lacks SystemRoot, or a DLL on PATH shadows a Winsock provider dependency, or the Winsock catalog is damaged (VPN/antivirus LSP) [?].",
+          "In build-env.json look for SYSTEMROOT and duplicate PATH/Path keys; if both are fine run `netsh winsock reset` in an admin shell and reboot."),
+    Known("hip-lib-windows",r"no libamdhip64\.so or libamdhip64\.so\.<version>",
           "util/hip_lib.py looks for the Linux library name",
           "A JIT HIP kernel (GDN/PLE/DQ/GR under serve.py) loaded the runtime through the Linux-only lookup.",
           "Apply doc/windows/review/patches/hip_lib_windows.patch (task S3-02), or set EXL3_GDN_FUSE=0 EXL3_GDN_HF=0 to avoid the JIT path first."),
@@ -743,10 +756,12 @@ def probe_vs(run: Run) -> Check:
 def capture_vs_env(run: Run, vsdev: Path) -> dict[str, str]:
     """Environment after `VsDevCmd.bat -arch=amd64`: INCLUDE/LIB/PATH for cl, clang-cl and hipcc."""
     r = run.run(["cmd", "/c", f'call "{vsdev}" -arch=amd64 -host_arch=amd64 >nul 2>&1 && set'], "vsdevcmd-env", timeout=120, stream=False)
-    env = parse_set_output(r.out)
-    diff = env_diff(dict(os.environ), env)
+    parsed = parse_set_output(r.out)
+    diff = env_diff(dict(os.environ), parsed)
     log.debug("    VsDevCmd changed/added %d variables: %s", len(diff), sorted(diff))
-    return env
+    # Merge onto os.environ (upper-case keys, like the `check` environment that works) instead of using the raw `set`
+    # output: that has mixed-case keys ('Path'), so sdk_env's env["PATH"] became a second, conflicting PATH entry [I].
+    return merge_env(dict(os.environ), parsed)
 
 
 @_guard

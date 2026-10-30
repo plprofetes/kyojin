@@ -35,6 +35,11 @@ class Pure(unittest.TestCase):
         self.assertEqual(d["INCLUDE"], (None, "i"))
         self.assertNotIn("X", d)
 
+    def test_merge_env_no_case_duplicates(self):
+        m = kw.merge_env({"PATH": "a", "SYSTEMROOT": "C:\\Windows"}, {"Path": "b", "SystemRoot": "C:\\Windows", "INCLUDE": "i"})
+        self.assertEqual(m, {"PATH": "b", "SYSTEMROOT": "C:\\Windows", "INCLUDE": "i"})
+        self.assertEqual(kw.merge_env({"A": "1"}, {}), {"A": "1"})   # base-only variables are kept
+
     def test_pick_vs(self):
         self.assertIsNone(kw.pick_vs("[]"))
         self.assertIsNone(kw.pick_vs("not json"))
@@ -134,6 +139,7 @@ class RunTests(unittest.TestCase):
 class HelpfulErrors(unittest.TestCase):
     SAMPLES = {
         "uv-project-sync": "Creating virtual environment at: .venv",
+        "winsock-provider": "OSError: [WinError 10106] Żądany dostawca usług nie został załadowany lub zainicjowany",
         "no-msvc": "subprocess.CalledProcessError: Command '['where', 'cl']' returned non-zero exit status 1.",
         "distutils-use-sdk": "UserWarning: It seems that the VC environment is activated but DISTUTILS_USE_SDK is not set.",
         "missing-win-headers": "C:\\sdk\\hip_runtime.h(10,10): fatal error: 'cstdint' file not found",

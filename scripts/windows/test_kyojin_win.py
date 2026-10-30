@@ -163,6 +163,7 @@ class HelpfulErrors(unittest.TestCase):
         "gpu-alloc-failed": "RuntimeError: CUDA error: HIPBLAS_STATUS_ALLOC_FAILED when calling `hipblasCreate(handle)`",
         "hip-oom": "torch.OutOfMemoryError: HIP out of memory. Tried to allocate 16.00 GiB",
         "file-locked": "PermissionError: [WinError 32] The process cannot access the file because it is being used by another process",
+        "no-ninja-fallback": "clang: error: no such file or directory: '/EHsc'",
         "flag-leak": "clang: error: unknown argument: '-Xcompiler=/Zc:preprocessor'",
         "python-h": "fatal error: 'Python.h' file not found",
         "ext-not-built": "ImportError: exllamav3_ext is not built. On Windows with ROCm torch the JIT build is not supported",

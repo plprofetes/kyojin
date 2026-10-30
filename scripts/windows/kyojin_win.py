@@ -366,9 +366,10 @@ def sdk_env(root: Path, base: dict[str, str]) -> dict[str, str]:
     return env
 
 
-def serve_command(py: str, model: str, port: int, ctx: int) -> list[str]:
+def serve_command(py: str, model: str, port: int, ctx: int, extra: list[str] | None = None) -> list[str]:
+    """`extra` (serve.py flags after `--`) comes last, so argparse lets it override the defaults above (e.g. --draft-policy mtp)."""
     return [py, "-u", str(REPO / "tools" / "qwen" / "serve.py"), "--model", model, "--port", str(port),
-            "-c", str(ctx), "--no-vision", "--draft-policy", "off"]
+            "-c", str(ctx), "--no-vision", "--draft-policy", "off", *(extra or [])]
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -1226,7 +1227,8 @@ def cmd_serve(run: Run, args) -> int:
     env.setdefault("PYTHONUTF8", "1")      # cp1250 locale: serve.py and loaders call read_text() without encoding (instead of tools_qwen_serve_py.patch)
     if root:
         env["EXL3_ROCM_SDK"] = root       # util/hip_compiler.py resolves hipcc from this; ROCM_PATH/HIP_PATH deliberately not set at runtime
-    cmd = serve_command(str(venv_python()), str(model), args.port, args.ctx)
+    extra = args.extra[1:] if args.extra[:1] == ["--"] else args.extra
+    cmd = serve_command(str(venv_python()), str(model), args.port, args.ctx, extra)
     log.info("serving: %s", " ".join(_q(c) for c in cmd))
     r = run.run(cmd, "serve", env=env, cwd=REPO, stream=True)
     run.add(Check("serve", INFO, f"server exited {describe_exit(r.code)}", {"log": r.logfile.name, "tail": r.tail(40)}))
@@ -1249,6 +1251,7 @@ def main(argv: list[str] | None = None) -> int:
     sv.add_argument("--model", required=True)
     sv.add_argument("--port", type=int, default=8000)
     sv.add_argument("--ctx", type=int, default=8192)
+    sv.add_argument("extra", nargs=argparse.REMAINDER, help="after `--`: extra tools/qwen/serve.py flags, e.g. -- --draft-policy mtp")
     args = ap.parse_args(argv)
     if Path(sys.prefix).resolve() == (REPO / ".venv").resolve():
         print("kyojin_win is running inside the repository's .venv: `uv run` synced the project (pulls CPU/CUDA torch).\n"

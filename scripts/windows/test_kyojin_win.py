@@ -110,6 +110,8 @@ class Pure(unittest.TestCase):
         self.assertIn("--no-vision", c)
         self.assertEqual(c[c.index("--draft-policy") + 1], "off")
         self.assertTrue(c[2].replace("\\", "/").endswith("tools/qwen/serve.py"))
+        c = kw.serve_command("py", "m", 8000, 8192, ["--draft-policy", "mtp"])
+        self.assertEqual(c[-2:], ["--draft-policy", "mtp"])    # last occurrence wins in argparse
 
 
 class RunTests(unittest.TestCase):

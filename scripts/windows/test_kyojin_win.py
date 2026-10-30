@@ -40,6 +40,13 @@ class Pure(unittest.TestCase):
         self.assertEqual(m, {"PATH": "b", "SYSTEMROOT": "C:\\Windows", "INCLUDE": "i"})
         self.assertEqual(kw.merge_env({"A": "1"}, {}), {"A": "1"})   # base-only variables are kept
 
+    def test_vsdevcmd_cmd_has_no_escaped_quotes(self):
+        import subprocess
+        line = subprocess.list2cmdline(kw.vsdevcmd_cmd(Path(r"C:\Program Files (x86)\VS\VsDevCmd.bat")))
+        self.assertNotIn('\\"', line)    # cmd does not unescape \" (the old single-string form produced it)
+        self.assertIn('call "C:\\Program Files (x86)\\VS\\VsDevCmd.bat" -arch=amd64', line)
+        self.assertTrue(line.endswith(">nul 2>&1 && set"))
+
     def test_pick_vs(self):
         self.assertIsNone(kw.pick_vs("[]"))
         self.assertIsNone(kw.pick_vs("not json"))

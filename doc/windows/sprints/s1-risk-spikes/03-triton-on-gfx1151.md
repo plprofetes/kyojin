@@ -1,6 +1,6 @@
 # Spike: Triton kernels run on gfx1151 via triton-windows
 
-- Status: todo
+- Status: done
 - Depends: S1-01
 - Risk: HIGH. 43 modules import triton at module level and Qwen3.5's Gated DeltaNet layers use the vendored FLA Triton kernels. Support is documented for RDNA3.5 but untested with Kyojin's kernels.
 
@@ -28,3 +28,4 @@ Sprint: [Sprint 1: risk spikes (fail fast)](README.md) · ID S1-03 · priority o
 Depends on: [S1-01](01-preflight-green.md)
 
 - 2026-10-30, `check` after the probe-from-file fix: **[V] the `triton` probe PASSED on the target** (triton-windows 3.9.0.post30, vector add on gfx1151, run while another LLM held the GPU). Details (compiler used, timing) not yet seen; ask for that run's `report.json`. Still open: a real Kyojin Triton kernel (step 2) and the 3.8.0.post29 comparison if needed.
+- 2026-10-30, `fla_standalone_test.py` (T=100, H=2, HV=4, K=128) on gfx1151, torch 2.15.0a0+rocm10.1.0a20260822, triton-windows 3.9.0.post30: **[V] PASS**. Vendored FLA gated-delta-rule chunk kernels vs the naive fp32 recurrence: output max|diff| 2.28e-04 (max|ref| 4.73e-02), state max|diff| 1.06e-03 (max|ref| 4.30e-01). Cold run 49.9 s (Triton compile/autotune), warm 0.7 ms. `import fla` took 1.58 s; `IS_AMD=True`. Triton warns `TRITON_DEFAULT_FP_FUSION` is unset (default flips in 3.10). Not yet done: `--qwen` (T=4096 timing), which C compiler Triton picked (not printed), the 3.8.0.post29 comparison (not needed).

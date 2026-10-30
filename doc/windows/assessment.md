@@ -172,6 +172,22 @@ Rule for this port: copy no third-party code unless its licence is recorded here
 
 Verification status: AMD index contents and the torch wheel `METADATA` were read directly over HTTP from a Linux sandbox. Hugging Face was unreachable from the sandbox (proxy 403 at every check), so model repo names remain unconfirmed.
 
+## 7d. Versions and SHAs used (reproducibility)
+
+| What | Version / SHA | Where it comes from |
+|---|---|---|
+| Kyojin base release | 1.8.3, commit `2132bd2` | `git log` before the port; port commits follow on `claude/modest-rubin-p69b5g` |
+| Upstream exllamav3 (read-only reference) | v1.6.5, commit `cdc785d`, depth-1 clone on 2026-10-30 | github.com/turboderp-org/exllamav3, in `/tmp` (not in the repo) |
+| torch (Windows, cp312) | `2.15.0a0+rocm10.1.0a20260822` | AMD index; Linux-verified Kyojin pin is `2.14.0+rocm10.1.0a20260822` |
+| rocm, rocm-sdk-core/devel, amd-torch-device-gfx1151 | `10.1.0a20260822` (device wheel: torch version) | AMD index, METADATA read directly |
+| AMD index | `https://rocm.nightlies.amd.com/whl-multi-arch/` (TheRock documents `https://nightly.repo.amd.com/rocm/whl-next/`; equivalence unverified) | |
+| triton-windows | spec `<3.9`; latest on PyPI at review time `3.9.0.post30` (released 28 Oct); Linux Kyojin pin is triton `3.8.0` | PyPI, github.com/triton-lang/triton-windows releases |
+| TheRock docs read | `main` branch RELEASES.md on 2026-10-30; commit SHA not captured | github.com/ROCm/TheRock |
+| uv | any recent; version is logged in each run (`uv --version` probe) | |
+| Python | 3.12 (uv-managed) | |
+
+Pins live in `scripts/windows/kyojin_win.py` (`ROCM_VER`, `TORCH_VER`, `TRITON_SPEC`). After the first good `setup`, replace the open ranges (`triton-windows<3.9`, unpinned PyPI requirements) with exact versions from that run's `pip-freeze.txt` (task S5-03; do it earlier if a run is worth reproducing).
+
 ## 8. Risk ranking
 
 1. Kyojin Triton kernels (GDN/FLA, paged attention) untested on triton-windows AMD; runtime correctness risk.

@@ -485,6 +485,10 @@ KNOWN: tuple[Known, ...] = (
           "A flag unknown to clang reached hipcc/clang-cl",
           "setup.py (or the JIT path in ext.py) passed an nvcc-only or MSVC-only option.",
           "Read the flag in the message, find the failing command after `FAILED:` in the log, and gate that flag in setup.py for torch.version.hip."),
+    Known("no-ninja-fallback", r"clang(\.exe)?: error: no such file or directory: '/(EHsc|MD|wd\d+)'",
+          "torch fell back to the non-ninja build path (nvcc-style `-Xcompiler /EHsc` pairs reach clang)",
+          "`ninja --version` failed inside the build: .venv-win\\Scripts was not on PATH [I].",
+          "Update kyojin_win.py (build prepends the venv Scripts dir to PATH); check that `.venv-win\\Scripts\\ninja.exe` exists, else run `setup`."),
     Known("python-h", r"fatal error: 'Python\.h' file not found|Cannot open include file: 'Python\.h'",
           "Python headers missing",
           "The venv interpreter has no include/ directory (non-uv or Microsoft Store Python).",
@@ -1125,6 +1129,9 @@ def cmd_build(run: Run, args) -> int:
     env = capture_vs_env(run, Path(vs.details["VsDevCmd"]))
     root = Path(sdk.details["root"])
     env = sdk_env(root, env)
+    # torch's BuildExtension runs `ninja --version` and silently falls back to the serial distutils path (which passes
+    # `-Xcompiler /EHsc` pairs that clang reads as input files) when ninja is not on PATH; the venv is not activated here.
+    env["PATH"] = str(VENV / "Scripts") + os.pathsep + env["PATH"]
     jobs = compute_jobs(os.cpu_count() or 1, ram.details.get("avail_phys_gb", 16), args.jobs)
     env["MAX_JOBS"] = str(jobs)
     if args.verbose_build:

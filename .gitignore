@@ -37,3 +37,6 @@ tools/ds41/_scratch/
 
 scratch
 docs-notes
+
+# Windows venv created by scripts/windows/kyojin_win.py
+.venv-win/

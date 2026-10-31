@@ -62,6 +62,14 @@ class Pure(unittest.TestCase):
             if r != "torch":    # torch comes from the AMD index (TORCH_VER)
                 self.assertIn(r, pins, f"requirements.txt package {r} is not pinned in constraints-win.txt")
 
+    def test_observed_ids_exist_and_hypotheses_are_tagged(self):
+        ids = {k.id for k in kw.KNOWN}
+        self.assertLessEqual(kw.OBSERVED, ids)
+        obs = next(k for k in kw.KNOWN if k.id == "register-at-fork")
+        hyp = next(k for k in kw.KNOWN if k.id == "tdr")
+        self.assertEqual(kw.known_tag(obs), "")
+        self.assertIn("hypothesis", kw.known_tag(hyp))
+
     def test_pick_vs(self):
         self.assertIsNone(kw.pick_vs("[]"))
         self.assertIsNone(kw.pick_vs("not json"))

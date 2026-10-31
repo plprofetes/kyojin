@@ -206,3 +206,8 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - `turboderp/Qwen3.8-27B-exl3` @ `4.00bpw` (15.73 GiB, 39 `mtp.*` tensors) served with `-- --draft-policy mtp`; same server, `temperature: 0`, 150-word hash-table prompt, `speculative` true (default) vs `false` per request: **text identical (True)**, decode **14.44 tok/s with MTP vs 12.59 tok/s without (+14.7 %)**, `timings.speculative` true **[V: user's PowerShell output]**. Single runs on prose, where MTP acceptance is low (the HermiHg card measures 0.20 to 0.23 acceptance on prose, 0.7 to 0.8 on repetitive/code); `mix` (adds n-gram) and code/repetitive prompts not tried.
 - Plain decode is 12.6 tok/s for 15.7 GiB of weights and 33 tok/s for the 6.7 GiB 9B pack: about 200 to 220 GiB/s of weight traffic in both, i.e. memory-bandwidth bound **[I, arithmetic from the timings]**.
 - Statuses: S3-01, S3-04, S4-03, S4-04 closed. Open in the POC path: S4-05 (soak), S1-04 (memory ceiling), S2-03 (Linux regression of shared edits), S3-03 (partial: `gr_mix`/`qsa_pf` not exercised), S5 (clean-machine run, CI feasibility, pins, install doc, catalogue prune).
+
+## 2026-10-31: soak, first part (S4-05)
+
+- 13 sequential requests on Qwen3.8-27B 4.00bpw + MTP, up to a 7.2K-token context in an 8192 window: all completed, no TDR event, GPU dedicated memory 20.18 to 20.39 GiB **[V]**. Prompt cache works (identical prompt: 1 new token, about 20 ms). Prefill 54 to 65 tok/s on first use (4,023 and 3,183 tokens) **[V]**, which is slow next to the README's NVIDIA figures but is a cold-ish first-use number on a different GPU, not a conclusion **[?]**.
+- Next: distinct-prompt requests to defeat the cache; then S1-04 sweep with the server stopped.

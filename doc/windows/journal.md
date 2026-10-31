@@ -216,3 +216,8 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 
 - Idle GPU, `torch.ones` in 1 GiB chunks: OOM at **75 GiB** while the driver reports 32.70 GiB free; single allocations of up to **80 GiB** work (largest tried) **[V]**. torch's 107.87 GiB total is therefore not usable as a budget: a model is thousands of mid-sized tensors, which behaves like the chunk case **[I]**. A 90.7 GB (about 84.5 GiB) pack plus KV cache would not fit if the chunk limit is the real one; the 15.7 GiB 27B pack (20.4 GiB resident) is far below it.
 - Next: repeat with 256 MiB and 4 GiB chunks and singles of 88/96/104 GiB to see whether the limit depends on allocation size; record the Task Manager dedicated/shared totals and the Adrenalin/BIOS setting.
+
+## 2026-10-31: S5-04 install doc, S5-05 catalogue marked
+
+- `doc/windows/install.md` written from the journal (prerequisites, install, model + MTP, request quoting, measured numbers, limits, what to send) and linked from the main README and `doc/windows/README.md`. Not validated on a clean machine (S5-01).
+- Error catalogue: `OBSERVED` set (10 of 43); unobserved signatures are printed as hypotheses. `winsock-provider` text still names the old causes; revise it when convenient.

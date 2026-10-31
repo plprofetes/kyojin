@@ -284,3 +284,7 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 
 - docs.github.com: standard Windows runners (windows-2022/2025/latest): public repo 4 vCPU / 16 GB RAM / **14 GB SSD**, private 2 vCPU / 8 GB / 14 GB; free and unlimited on public repos; job limit 6 h; Free plan artifact storage 500 MB, cache 10 GB per repo; release assets under 2 GiB each, no total limit **[V]**. Terms: Actions may be used for "the production, testing, deployment, or publication of the software project" of the repository; cryptomining, using Actions as a CDN or serverless backend are prohibited **[V]**. Building and publishing this wheel is within that.
 - Correction to my S5-02 entry: disk is borderline (14 GB vs our ~10 GB footprint plus the uv cache), not "not a blocker"; recorded in deferred.md and S6-01.
+
+## 2026-10-31: CI wheel job assessed (no code written)
+
+- User agreed to GitHub CI/CD (public repo) and asked for assessment only; implementation is for the next session. Findings recorded in [S6-01](sprints/s6-scale-and-speed/01-ci-windows-rocm-wheel.md): compile needs no GPU (arch detection is skipped when `PYTORCH_ROCM_ARCH` is set); `kyojin_win.py` needs a `--ci` flag (GPU/disk preflight, final GPU probes) and `build --wheel`; a separate workflow file is proposed; runner facts (VS version, free disk, time) must be measured on the first run.

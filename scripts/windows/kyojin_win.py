@@ -385,8 +385,9 @@ class Known:
     fix: str
 
 
-# HYPOTHESES from how these toolchains usually fail, not yet observed on this stack. When a real failure matches
-# nothing here, add its signature after the first run (see doc/windows/deferred.md, "error catalogue").
+# Failure signatures. Those in OBSERVED (below) were seen on the target; the rest are HYPOTHESES from how these toolchains
+# usually fail. When a real failure matches nothing here, add its signature after the first run (see doc/windows/deferred.md,
+# "error catalogue").
 KNOWN: tuple[Known, ...] = (
     Known("uv-project-sync", r"Creating virtual environment at: \.venv\b",
           "uv synced the repository project instead of running the script alone",
@@ -558,6 +559,16 @@ KNOWN: tuple[Known, ...] = (
           "Apply doc/windows/review/patches/hip_lib_windows.patch (task S3-02), or set EXL3_GDN_FUSE=0 EXL3_GDN_HF=0 to avoid the JIT path first."),
 )
 
+# Signatures seen on the real target machine (journal 2026-10-30/31); every other entry above is still a hypothesis and is
+# reported as such. Move an id here only with a log line or run folder that matched it.
+OBSERVED = frozenset({"winsock-provider", "no-ninja-fallback", "cpu-target-feature", "compiler-rt-builtin", "tokenizers-rc",
+                      "jit-hipcc-missing", "register-at-fork", "dll-missing", "openblas-oom", "gpu-alloc-failed"})
+
+
+def known_tag(k: Known) -> str:
+    return "" if k.id in OBSERVED else " (hypothesis, not yet observed)"
+
+
 ERROR_LINE = re.compile(r"(?i)(\berror\b|\bfatal\b|FAILED:|Traceback \(most recent|\bLNK\d{4}\b|\bC\d{4}:|cannot open|no such file|"
                         r"undefined (symbol|reference)|unresolved external|not found|Segmentation|access violation)")
 ERROR_NOISE = re.compile(r"(?i)(\b0 errors?\b|-Werror|-Wno-error|error_code|warning:|errors?[- ]handling|stderr|Error checking compiler version|argument unused during compilation)")
@@ -586,7 +597,7 @@ def render_failure(title: str, cmd: list[str], code: int | None, seconds: float,
          f"  log     : {logname}"]
     if known:
         for k in known[:3]:
-            L += [f"  likely  : {k.title} [{k.id}]", f"    why   : {k.cause}", f"    fix   : {k.fix}"]
+            L += [f"  likely  : {k.title} [{k.id}]{known_tag(k)}", f"    why   : {k.cause}", f"    fix   : {k.fix}"]
     else:
         L += ["  likely  : no known signature matched (new failure: please send the log folder)"]
     if errors:
@@ -954,7 +965,7 @@ def probe_error(name: str, d: dict, default_hint: str) -> Check:
     if known:
         k = known[0]
         d["why"] = k.cause
-        return Check(name, FAIL, f"{first}  [{k.id}: {k.title}]", d, k.fix)
+        return Check(name, FAIL, f"{first}  [{k.id}: {k.title}]{known_tag(k)}", d, k.fix)
     return Check(name, FAIL, first, d, default_hint)
 
 

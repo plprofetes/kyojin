@@ -62,7 +62,7 @@ On the target (single runs, not benchmarks): Qwen3.5-9B 4.00bpw decodes 33 tok/s
 
 ## Limits to know
 
-- GPU memory: torch reports 107.87 GiB, but allocating in 1 GiB chunks stopped at 75 GiB (a single 80 GiB block worked) **[V]**. Packs near 85 GiB are not expected to fit.
+- GPU memory: torch reports 107.87 GiB; on an idle GPU, allocations in 256 MiB, 1 GiB and 4 GiB chunks ran out at about 100 to 101.75 GiB, and a single 88 GiB block worked while 96 GiB failed **[V]**. Plan for about 100 GiB in total, less if another program holds GPU memory (a first sweep stopped at 75 GiB, probably for that reason **[?]**). A pack of about 85 GiB plus cache is therefore not ruled out.
 - Windows sees about 31.6 GB of the 128 GB RAM on the target **[V]**.
 - Linux-only server features degrade quietly (swap read-back, page-cache control).
 - The HIP kernels gdn_hf and ple are built and match the fallback path bitwise on one prompt **[V]**; others (gr_mix, qsa_pf) were not exercised.

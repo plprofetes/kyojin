@@ -1,6 +1,6 @@
 # Measure GPU-addressable memory on Windows
 
-- Status: todo
+- Status: active
 - Depends: S1-01
 - Risk: MEDIUM probability, HIGH impact on product fit, very cheap to learn. Windows WDDM exposes unified memory differently from Linux GTT; the answer sets the model-size ceiling.
 
@@ -32,6 +32,8 @@ No script. Paste into a Python prompt (`.venv-win\Scripts\python`); nothing is c
 **Evidence.** (run folders, versions, numbers; fill in)
 
 - 
+- 2026-10-31, server stopped, nothing else on the GPU (user), torch 2.15.0a0+rocm10.1.0a20260822, hip 7.16.26332: `mem_get_info` free/total 107.72 / 107.87 GiB. Allocating `torch.ones(2**30, uint8)` chunks (memory touched): **OOM after 75 GiB**, with the driver reporting 32.70 GiB free (`free: 35113152512, total: 115822460928` bytes in the allocator warning). After `del` and `empty_cache`, **single allocations of 24, 32, 48, 64 and 80 GiB all succeeded** (80 GiB was the largest tried) **[V: user's output]**. So 1 GiB chunks stop at 75 GiB although at least 80 GiB can be held as one block: the limit is not the 107.87 GiB that torch reports, and it is not simply "free memory" **[I]**. Not recorded yet: BIOS/Adrenalin graphics-memory setting, driver version, Task Manager dedicated/shared totals, and whether the chunk size changes the ceiling.
+
 
 **Links.** [existing torch probe output](../../../../scripts/windows/kyojin_win.py) · [expert tiering code that assumes Linux memory](../../../../exllamav3/util/memory.py) · next: [S1-05](05-model-pack-on-disk.md)
 

@@ -46,5 +46,5 @@ Tasks inside a sprint are in **priority order: hardest and most uncertain first*
 | S5 Sprint 5: harden and publish the path | todo | 0/5 | [s5-harden](sprints/s5-harden/README.md) |
 | S6 Sprint 6: scale and speed (backlog) | no tasks yet | 0/0 | [s6-scale-and-speed](sprints/s6-scale-and-speed/README.md) |
 
-**Next actionable task:** [S1-04 Measure GPU-addressable memory on Windows](sprints/s1-risk-spikes/04-gpu-memory-ceiling.md) (status: todo)
+**Next actionable task:** [S1-04 Measure GPU-addressable memory on Windows](sprints/s1-risk-spikes/04-gpu-memory-ceiling.md) (status: active)
 <!-- tasks:end -->

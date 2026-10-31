@@ -211,3 +211,8 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 
 - 13 sequential requests on Qwen3.8-27B 4.00bpw + MTP, up to a 7.2K-token context in an 8192 window: all completed, no TDR event, GPU dedicated memory 20.18 to 20.39 GiB **[V]**. Prompt cache works (identical prompt: 1 new token, about 20 ms). Prefill 54 to 65 tok/s on first use (4,023 and 3,183 tokens) **[V]**, which is slow next to the README's NVIDIA figures but is a cold-ish first-use number on a different GPU, not a conclusion **[?]**.
 - Next: distinct-prompt requests to defeat the cache; then S1-04 sweep with the server stopped.
+
+## 2026-10-31: GPU memory sweep (S1-04, first part)
+
+- Idle GPU, `torch.ones` in 1 GiB chunks: OOM at **75 GiB** while the driver reports 32.70 GiB free; single allocations of up to **80 GiB** work (largest tried) **[V]**. torch's 107.87 GiB total is therefore not usable as a budget: a model is thousands of mid-sized tensors, which behaves like the chunk case **[I]**. A 90.7 GB (about 84.5 GiB) pack plus KV cache would not fit if the chunk limit is the real one; the 15.7 GiB 27B pack (20.4 GiB resident) is far below it.
+- Next: repeat with 256 MiB and 4 GiB chunks and singles of 88/96/104 GiB to see whether the limit depends on allocation size; record the Task Manager dedicated/shared totals and the Adrenalin/BIOS setting.

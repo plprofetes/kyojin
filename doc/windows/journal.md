@@ -292,3 +292,7 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 ## 2026-10-31: CI in three tiers (decision)
 
 - User: "the shame is we cannot test the windows working"; agreed to three tiers: (1) always-on Linux checks (unit tests, `uv pip compile` of both install steps, pinned nightly wheels still on the AMD index, weekly) = [S6-06](sprints/s6-scale-and-speed/06-ci-tier1-checks.md); (2) manual hosted build-only wheel = [S6-01](sprints/s6-scale-and-speed/01-ci-windows-rocm-wheel.md); (3) a written local GPU release gate = [S6-07](sprints/s6-scale-and-speed/07-local-release-gate.md). GPU behaviour stays untested in CI by design; no self-hosted runner (public repo, fork-PR risk).
+
+## 2026-10-31: S2-03 can use GitHub's Linux runners
+
+- Existing workflows already cover the Linux build check: `nix.yml` (every PR; recompiles the ROCm extension because `setup.py`/`exllamav3_ext/` changed; CPU tests; nixfmt/deadnix/statix gate) and `container.yml` (manual dispatch with `ref`, Dockerfile builds the gfx1151 extension and imports it). The fork has **no workflows registered and no runs** (Actions disabled), so nothing has run yet **[V via the GitHub API]**. Next: enable Actions in the fork, dispatch both on the branch, record the results in S2-03.

@@ -14,7 +14,7 @@ Legend: **[V]** verified, **[I]** inferred, **[?]** unknown (see the assessment)
 |---|---|---|
 | GLM, MiMo, DeepSeek-V4.1 servers (`tools/glm`, `tools/mimo`, `tools/ds41*`) | POC is Qwen only. GLM/MiMo add MLA/DSA kernels not exercised by Qwen. | Sprint 6, after Qwen serves |
 | DS41 SSD expert tier (`modules/expert_store.py` `O_DIRECT`, `engram_io.py` `os.preadv`, `dsv41/*`) | Needs `FILE_FLAG_NO_BUFFERING` / overlapped IO rewrite; experimental even on Linux. | Only if someone wants 100 GB+ models on Windows |
-| Qwen3.8-Flash-Next (95 GB) and 27B-class models | Blocked on the Windows GPU-memory ceiling question **[?]**; a small model keeps RAM free for compiling. | Sprint 6 |
+| Qwen3.8-Flash-Next (95 GB) and 27B-class models | Ceiling measured at about 100 GiB usable GPU memory (S1-04): an 84.5 GiB pack (Qwen3.8-Flash-Next 2.18bpw, 90.7 GB on HF) plus KV cache is not ruled out; untried. The 27B (15.7 GiB) runs. | Sprint 6 |
 | Vision tower (`--no-vision`) | Fewer kernels, less memory. | After text serving is stable |
 | Speculative decoding / MTP drafter (`--draft-policy off`) | Adds the drafter model and extra kernels; lossless, so it is purely a speed feature. | Sprint 6 |
 | Uncensor presets (`presets/`) | Unrelated to the port. | Never needed for the port |

@@ -232,3 +232,7 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - Disk on the target: `.venv-win` 8.7 GB, `build` 0.2 GB, `~\.triton` 0.7 GB, models 22.4 GB **[V]** (uv cache and uv Python not measured). The 40 GB `MIN_FREE_GB` estimate in `doctor` is too high for the environment alone (about 10 GB measured, plus the uv download cache); not changed yet because the uv cache size is unknown.
 - CI: no `windows_rocm_smoke` job; reason and alternative in deferred.md (no GPU on hosted runners; build-only job possible but untried).
 - Pins: "moving the pins" procedure added to `install.md`. The remaining S5-03 evidence is a `setup --recreate` comparison on the target.
+
+## 2026-10-31: soak rerun: warm prefill about 500-550 tok/s
+
+- Same 13 requests again on Qwen3.8-27B 4.00bpw + MTP: all completed; 4,023-token prefill 7.3 s (549 tok/s) vs 74 s the first time, 3,183 tokens 6.4 s (499 tok/s) vs 49 s; decode 16-18 tok/s **[V]**. The first-run figures were first-use costs **[I]**; the install guide's earlier statement about slow prefill does not apply. The distinct-prompt run (cache defeated) is still not done.

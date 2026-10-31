@@ -1,10 +1,12 @@
-# CI: build the Windows ROCm wheel on a hosted runner
+# CI tier 2: build the Windows ROCm wheel on a hosted runner (manual)
 
 - Status: todo
 - Depends: S5-02
 - Risk: HIGH: nothing is known about a hosted-runner build (time, RAM, arch detection without a GPU); needs the user's consent for the workflow target.
 
 Sprint: [Sprint 6: ship it and scale](README.md) · ID S6-01 · priority order 1 in the sprint
+
+**Scope decision (user, 2026-10-31): three tiers.** This task is tier 2 only (manual, hosted, build-only, no GPU test). Tier 1 is [S6-06](06-ci-tier1-checks.md), tier 3 is [S6-07](07-local-release-gate.md). Reason: CI cannot run the GPU parts, but most of the failures met in this port were build/install failures, which a hosted runner can catch.
 
 **Goal.** A manual `workflow_dispatch` target `windows_rocm` in `.github/workflows/build.yml` that builds `exllamav3-<ver>+rocm<rocm>.torch<torch>-cp312-cp312-win_amd64.whl` and uploads it as an artifact. No GPU test, no automatic release.
 

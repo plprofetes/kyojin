@@ -47,5 +47,5 @@ Tasks inside a sprint are in **priority order: hardest and most uncertain first*
 | S5 Sprint 5: harden and publish the path | in progress | 4/5 | [s5-harden](sprints/s5-harden/README.md) |
 | S6 Sprint 6: scale and speed (backlog) | no tasks yet | 0/0 | [s6-scale-and-speed](sprints/s6-scale-and-speed/README.md) |
 
-**Next actionable task:** [S2-03 Linux no-regression check for the setup.py changes](sprints/s2-extension-builds/03-linux-no-regression.md) (status: todo)
+**Next actionable task:** [S2-03 Linux no-regression check for the setup.py changes](sprints/s2-extension-builds/03-linux-no-regression.md) (status: active)
 <!-- tasks:end -->

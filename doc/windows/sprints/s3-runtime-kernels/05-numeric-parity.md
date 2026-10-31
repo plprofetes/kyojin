@@ -1,6 +1,6 @@
 # Numeric parity with a reference
 
-- Status: todo
+- Status: done
 - Depends: S3-01
 - Risk: MEDIUM: tolerances and a trustworthy reference are the hard part.
 
@@ -21,6 +21,8 @@ Sprint: [Sprint 3: runtime kernels run](README.md) · ID S3-05 · priority order
 **Evidence.** (run folders, versions, numbers; fill in)
 
 - 
+- 2026-10-30, Qwen3.5-9B EXL3 4.00bpw, `temperature: 0`, 48 tokens, `logprobs: true`, `top_logprobs: 5`, `return_token_ids: true`, non-streaming, thinking off. Run A (defaults: PLE/DQ/GR/GDN HIP on, startup 99 s) vs run B (`EXL3_PLE_HIP=0 EXL3_DQ_HIP=0 EXL3_GR_HIP=0 EXL3_GDN_FUSE=0 EXL3_GDN_HF=0`, startup 24 s): `choices[0]` compared as JSON (text, token ids, logprobs) is **identical (True)** **[V: user's PowerShell comparison]**. The reference is the engine's own fallback path on the same machine, not another platform and not the unquantized model: it shows the Windows-compiled HIP kernels agree bitwise with the fallback on this prompt, no more. Only one prompt, 48 tokens; `gr_mix`/`qsa_pf` kernels were not built for this model, so they are not covered.
+
 
 **Links.** next sprint: [Sprint 4](../s4-serve-qwen/README.md)
 

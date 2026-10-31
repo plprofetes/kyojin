@@ -260,3 +260,7 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 ## 2026-10-31: `setup --recreate` from the corrected pins works
 
 - `setup --recreate`: PASS=19 FAIL=0 (venv deleted and recreated while the server was stopped; torch/ROCm install 5 s, requirements 1 s from the warm uv cache; `rocm-sdk init` 9 s, test 14 s); `check`: PASS=4 with the previously built extension importing against the new venv **[V]**. S5-03 waits for the freeze-vs-constraints comparison and a served request on pydantic 2.13.5.
+
+## 2026-10-31: S5-03 done
+
+- `uv pip freeze` of the recreated venv contains every line of `constraints-win.txt` exactly (no mismatch printed) **[V]**. S5-03 closed. Open: a served request on the new pinned set (pydantic 2.13.5), S5-01 (clean machine), S2-03 (Linux build).

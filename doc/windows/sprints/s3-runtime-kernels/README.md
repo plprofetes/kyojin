@@ -23,5 +23,5 @@ Status is edited in each task file; this table is generated: `python scripts/win
 | 2 | S3-02 | [util/hip_lib.py: find the HIP runtime DLL on Windows](02-hip-lib-windows.md) | done | S2-02 |
 | 3 | S3-03 | [util/hip_compiler.py and JIT .hsaco kernels on Windows](03-jit-hip-kernels.md) | active | S2-02 |
 | 4 | S3-04 | [Gated DeltaNet / FLA Triton kernels run on Windows](04-gdn-fla-kernels.md) | todo | S1-03 |
-| 5 | S3-05 | [Numeric parity with a reference](05-numeric-parity.md) | todo | S3-01 |
+| 5 | S3-05 | [Numeric parity with a reference](05-numeric-parity.md) | done | S3-01 |
 <!-- tasks:end -->

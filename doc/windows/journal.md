@@ -288,3 +288,7 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 ## 2026-10-31: CI wheel job assessed (no code written)
 
 - User agreed to GitHub CI/CD (public repo) and asked for assessment only; implementation is for the next session. Findings recorded in [S6-01](sprints/s6-scale-and-speed/01-ci-windows-rocm-wheel.md): compile needs no GPU (arch detection is skipped when `PYTORCH_ROCM_ARCH` is set); `kyojin_win.py` needs a `--ci` flag (GPU/disk preflight, final GPU probes) and `build --wheel`; a separate workflow file is proposed; runner facts (VS version, free disk, time) must be measured on the first run.
+
+## 2026-10-31: CI in three tiers (decision)
+
+- User: "the shame is we cannot test the windows working"; agreed to three tiers: (1) always-on Linux checks (unit tests, `uv pip compile` of both install steps, pinned nightly wheels still on the AMD index, weekly) = [S6-06](sprints/s6-scale-and-speed/06-ci-tier1-checks.md); (2) manual hosted build-only wheel = [S6-01](sprints/s6-scale-and-speed/01-ci-windows-rocm-wheel.md); (3) a written local GPU release gate = [S6-07](sprints/s6-scale-and-speed/07-local-release-gate.md). GPU behaviour stays untested in CI by design; no self-hosted runner (public repo, fork-PR risk).

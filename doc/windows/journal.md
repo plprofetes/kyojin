@@ -236,3 +236,8 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 ## 2026-10-31: soak rerun: warm prefill about 500-550 tok/s
 
 - Same 13 requests again on Qwen3.8-27B 4.00bpw + MTP: all completed; 4,023-token prefill 7.3 s (549 tok/s) vs 74 s the first time, 3,183 tokens 6.4 s (499 tok/s) vs 49 s; decode 16-18 tok/s **[V]**. The first-run figures were first-use costs **[I]**; the install guide's earlier statement about slow prefill does not apply. The distinct-prompt run (cache defeated) is still not done.
+
+## 2026-10-31: `setup --recreate` hit a locked file
+
+- `setup --recreate` died with `PermissionError: [WinError 32]` on `.venv-win\Lib\site-packages\torch\.kpack\torch_gfx1151.kpack` **[V]**: the `serve` process was still running and holds torch's files open. The script reported it as an INTERNAL ERROR. Now `remove_venv()` returns a `venv_delete` FAIL with the fix (stop the server and python.exe processes using the venv). Unit test added.
+- Side effect to know: `shutil.rmtree` deletes in order and had already removed part of `.venv-win` before the locked file stopped it; the venv is broken until `setup --recreate` is run again with the server stopped.

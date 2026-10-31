@@ -1,6 +1,6 @@
 # Gated DeltaNet / FLA Triton kernels run on Windows
 
-- Status: todo
+- Status: done
 - Depends: S1-03
 - Risk: MEDIUM-HIGH (depends on S1-03). The vendored FLA kernels are large Triton programs; compile time and register pressure on RDNA3.5 are unknowns.
 
@@ -21,6 +21,7 @@ Sprint: [Sprint 3: runtime kernels run](README.md) · ID S3-04 · priority order
 **Evidence.** (run folders, versions, numbers; fill in)
 
 - 
+- 2026-10-31: the vendored FLA GDN chunk kernels run on gfx1151 with triton-windows 3.9.0.post30: standalone test PASS (o err 2.3e-4, state err 1.1e-3 vs fp32 recurrence, cold 49.9 s, warm 0.7 ms) **[V]**, and the Qwen3.5-9B / Qwen3.8-27B hybrid models generate coherent text through `serve` (GDN layers executed) **[V]**; fused HIP GDN kernel (`gdn_hf`) equals the Triton/torch fallback bitwise on one prompt (S3-05).
 
 **Links.** [vendor/fla](../../../../exllamav3/vendor/fla) · [gated_delta_net](../../../../exllamav3/modules/gated_delta_net.py) · next: [S3-05](05-numeric-parity.md)
 

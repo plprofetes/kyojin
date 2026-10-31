@@ -264,3 +264,7 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 ## 2026-10-31: S5-03 done
 
 - `uv pip freeze` of the recreated venv contains every line of `constraints-win.txt` exactly (no mismatch printed) **[V]**. S5-03 closed. Open: a served request on the new pinned set (pydantic 2.13.5), S5-01 (clean machine), S2-03 (Linux build).
+
+## 2026-10-31: served request on the pinned set
+
+- Recreated venv (pydantic 2.13.5): `serve` on the 9B pack; a request sent during loading got `503 "Loading model"` (early health server), the next one "2+2 equals 4." with `finish_reason: stop`, 8 tokens at 14.2 tok/s, prompt 25 tok in 229 ms **[V]**. Matches the first smoke run (13.97 tok/s) because both were first requests of a fresh process; steady decode of this pack was 33 tok/s earlier. The pin set is therefore verified end to end on the target.

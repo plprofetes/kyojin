@@ -24,6 +24,7 @@ Tasks inside a sprint are in **priority order: hardest and most uncertain first*
 
 | Item | File |
 |---|---|
+| User-facing install guide (commands, prerequisites, limits) | [install.md](install.md) |
 | Background, upstream comparison, Linux-only inventory, risks, licences | [assessment.md](assessment.md) |
 | Independent review (Opus 5.5), findings and verification | [review/opus-r1.md](review/opus-r1.md), evidence [review/opus-r1-notes.md](review/opus-r1-notes.md) |
 | Things we are deliberately not doing, error catalogue process | [deferred.md](deferred.md) |
@@ -43,7 +44,7 @@ Tasks inside a sprint are in **priority order: hardest and most uncertain first*
 | S2 Sprint 2: the full extension builds and imports | in progress | 2/3 | [s2-extension-builds](sprints/s2-extension-builds/README.md) |
 | S3 Sprint 3: runtime kernels run | in progress | 4/5 | [s3-runtime-kernels](sprints/s3-runtime-kernels/README.md) |
 | S4 Sprint 4: serve a small Qwen over HTTP | in progress | 4/5 | [s4-serve-qwen](sprints/s4-serve-qwen/README.md) |
-| S5 Sprint 5: harden and publish the path | todo | 0/5 | [s5-harden](sprints/s5-harden/README.md) |
+| S5 Sprint 5: harden and publish the path | in progress | 2/5 | [s5-harden](sprints/s5-harden/README.md) |
 | S6 Sprint 6: scale and speed (backlog) | no tasks yet | 0/0 | [s6-scale-and-speed](sprints/s6-scale-and-speed/README.md) |
 
 **Next actionable task:** [S1-04 Measure GPU-addressable memory on Windows](sprints/s1-risk-spikes/04-gpu-memory-ceiling.md) (status: active)

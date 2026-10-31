@@ -20,6 +20,6 @@ Status is edited in each task file; this table is generated: `python scripts/win
 | 1 | S5-01 | [Clean-machine run from the docs only](01-clean-machine-run.md) | todo | S4-05 |
 | 2 | S5-02 | [CI feasibility: compile-only Windows job](02-ci-feasibility.md) | todo | S4-05 |
 | 3 | S5-03 | [Pin versions from a known-good run](03-pin-versions.md) | todo | S4-05 |
-| 4 | S5-04 | [Write doc/install-windows.md](04-install-doc.md) | todo | S5-01 |
-| 5 | S5-05 | [Prune and verify the error catalogue](05-error-catalogue-prune.md) | todo | S5-01 |
+| 4 | S5-04 | [Write doc/install-windows.md](04-install-doc.md) | done | S5-01 |
+| 5 | S5-05 | [Prune and verify the error catalogue](05-error-catalogue-prune.md) | done | S5-01 |
 <!-- tasks:end -->

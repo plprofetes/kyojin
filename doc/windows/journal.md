@@ -250,3 +250,9 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 
 - User: "qwen's serve console log is truncated?" Not truncated: without `-v` the script prints one heartbeat per 30 s and writes the server output to `03-serve.log` only (quiet console is a project rule, set for the build). For a server that hides startup progress and `READY`. `Run.run(..., show=True)` now echoes every line at INFO; `serve` uses it, so the console shows the server output without `-v` (the other commands are unchanged). Unit test added.
 - The user interrupted a 27B start at about 7 minutes (cold caches for the 27B shapes: Triton/HIP/tune work); the earlier first 27B start was not timed in this log **[?]**.
+
+## 2026-10-31: `setup --recreate` failed: typing-extensions pin (my error) and the fix
+
+- `setup --recreate` failed in step 1 (`uv-pip-torch-rocm`): `no version of typing-extensions==4.16.0` **[V: user's log]**. Cause: I had raised the pin from 4.15.0 to 4.16.0 so that stable `pydantic 2.14.0` would resolve (step 2), but step 1 resolves torch's dependencies from AMD's index only, and that index has `typing_extensions 4.15.0` at most **[V: index listing fetched here]**. My earlier consistency check covered step 2 only, and I said so; I should have tested step 1 before pushing. Also: the failed run left no venv packages (venv created, nothing installed).
+- Fix: `typing-extensions==4.15.0`, `pydantic==2.13.5`, `pydantic-core==2.46.5` (2.13.x needs only `typing-extensions>=4.14.1`). Both steps now resolve in `uv pip compile` for Windows/3.12 (step 1 against the AMD index with `--prerelease allow`, step 2 against PyPI); every resolved package is pinned and equal to the file **[V here]**. The file header and `install.md` now require both compiles after every edit.
+- Not covered: actual wheel installs (the compile reads metadata only).

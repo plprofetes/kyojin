@@ -72,7 +72,7 @@ On the target (single runs, not benchmarks): Qwen3.5-9B 4.00bpw decodes 33 tok/s
 The working set is pinned in two places: the constants at the top of `scripts/windows/kyojin_win.py` (torch, ROCm, triton-windows, the AMD index) and `scripts/windows/constraints-win.txt` (every other package, exact `==`, no pre-releases). To move them:
 
 1. Change the constants (or set the `KYOJIN_*` environment overrides to try first) and edit the constraints file.
-2. Prove the constraints resolve together for Windows and Python 3.12: the `uv pip compile ...` command in the header of `constraints-win.txt`. A pin that no longer resolves fails here, before a 9 GB download.
+2. Prove the constraints resolve for BOTH install steps (Windows, Python 3.12): the two `uv pip compile ...` commands in the header of `constraints-win.txt` (step 1 resolves torch's dependencies from AMD's index only, step 2 the rest from PyPI). A pin that no longer resolves fails here, before a 9 GB download.
 3. `setup --recreate`, then `build --clean`, `check`, and one served completion.
 4. Compare the installed set with the file: every constraints line must appear in `uv pip freeze --python .venv-win\Scripts\python.exe`.
 5. Update the version table in [assessment.md](assessment.md) section 7d and add a [journal.md](journal.md) entry.

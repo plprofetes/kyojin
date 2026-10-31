@@ -13,7 +13,8 @@ Sprint: [Sprint 6: ship it and scale](README.md) · ID S6-01 · priority order 1
 2. Install the pinned torch/ROCm/SDK with `-c scripts/windows/constraints-win.txt` and the AMD index (about 9 GB); set `PYTORCH_ROCM_ARCH=gfx1151`, `DISTUTILS_USE_SDK=1`, the VS developer environment and `EXL3_ROCM_SDK`; reuse `kyojin_win.py` where it fits instead of re-implementing the environment.
 3. Build the wheel (`python -m build --wheel -n` or `setup.py bdist_wheel`); name it with the local version tag `+rocm...torch...` as the CUDA wheels do (`build.yml` BUILDTAG).
 4. Smoke without a GPU: wheel contents, DLL dependencies (`dumpbin /dependents`), and whether `import exllamav3_ext` works without an AMD driver (unknown **[?]**).
-5. Record build time, disk and RAM of the runner.
+5. Record build time, disk and RAM of the runner. Disk first: GitHub documents 14 GB SSD for standard Windows runners; our footprint is about 10 GB plus the uv download cache. Print free space on C: and D: at the start; point `UV_CACHE_DIR` at the same drive as the venv (hardlinks) or use `--no-cache`; delete wheels after install; if still short, a larger runner (paid) or a self-hosted runner.
+6. Public repository: standard runners are free and unlimited (4 vCPU / 16 GB); a private repository gets 2 vCPU / 8 GB and a monthly minutes quota (not verified here), so `jobs` from `compute_jobs` will be lower. Forks have Actions disabled until enabled in the fork's Actions tab **[?, from memory]**.
 
 **Done when.**
 - A green manual run with the wheel as an artifact, or a written reason (numbers) why not, in [deferred.md](../../deferred.md).

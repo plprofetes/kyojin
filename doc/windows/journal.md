@@ -241,3 +241,7 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 
 - `setup --recreate` died with `PermissionError: [WinError 32]` on `.venv-win\Lib\site-packages\torch\.kpack\torch_gfx1151.kpack` **[V]**: the `serve` process was still running and holds torch's files open. The script reported it as an INTERNAL ERROR. Now `remove_venv()` returns a `venv_delete` FAIL with the fix (stop the server and python.exe processes using the venv). Unit test added.
 - Side effect to know: `shutil.rmtree` deletes in order and had already removed part of `.venv-win` before the locked file stopped it; the venv is broken until `setup --recreate` is run again with the server stopped.
+
+## 2026-10-31: S4-05 done; Sprint 4 complete
+
+- Distinct-prompt soak: 4 x 4,207 prompt tokens, prefill 523-558 tok/s, decode 19-28 tok/s, all finished, GPU memory 20.58 GiB (was 20.18 at the start of the soak) **[V]**. Sprint 4 (serve a small Qwen over HTTP): all five tasks done. Open elsewhere: S2-03 (Linux build check), S5-01 (clean machine), S5-03 (recreate comparison), plus the optional larger-model and speed items in Sprint 6.

@@ -1,6 +1,6 @@
 # Pin versions from a known-good run
 
-- Status: todo
+- Status: active
 - Depends: S4-05
 - Risk: LOW-MEDIUM: nightlies get pruned; an unpinned setup rots.
 
@@ -21,6 +21,7 @@ Sprint: [Sprint 5: harden and publish the path](README.md) · ID S5-03 · priori
 **Evidence.** (run folders, versions, numbers; fill in)
 
 - 
+- 2026-10-31: exact pins in place: torch/ROCm/triton constants in `kyojin_win.py` and every other package in `scripts/windows/constraints-win.txt` (from the working venv's `uv pip freeze`; pydantic, pydantic-core, safetensors, typing-extensions replaced by the stable `uv.lock` versions; consistency proven with `uv pip compile` for Windows/3.12). The note on moving the pins is in [install.md](../../install.md). Not yet shown: that `setup --recreate` from the pins reproduces the working set (done-when). Check after a recreate: every line of the constraints file must appear identically in `uv pip freeze --python .venv-win\Scripts\python.exe`.
 
 **Links.** next: [S5-04](04-install-doc.md)
 

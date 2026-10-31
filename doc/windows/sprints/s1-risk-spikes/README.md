@@ -23,6 +23,6 @@ Status is edited in each task file; this table is generated: `python scripts/win
 | 1 | S1-01 | [Preflight green: doctor and setup on the target machine](01-preflight-green.md) | done | - |
 | 2 | S1-02 | [Spike: a minimal HIP extension compiles and loads with hipcc.exe + cl.exe](02-hip-extension-spike.md) | done | S1-01 |
 | 3 | S1-03 | [Spike: Triton kernels run on gfx1151 via triton-windows](03-triton-on-gfx1151.md) | done | S1-01 |
-| 4 | S1-04 | [Measure GPU-addressable memory on Windows](04-gpu-memory-ceiling.md) | todo | S1-01 |
+| 4 | S1-04 | [Measure GPU-addressable memory on Windows](04-gpu-memory-ceiling.md) | active | S1-01 |
 | 5 | S1-05 | [Get a small Qwen EXL3 pack on disk (user, parallel)](05-model-pack-on-disk.md) | done | - |
 <!-- tasks:end -->

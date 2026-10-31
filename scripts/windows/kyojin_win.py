@@ -204,8 +204,9 @@ class Run:
     # -- subprocess -------------------------------------------------------------------------------------------------
 
     def run(self, cmd: list[str], name: str, env: dict[str, str] | None = None, cwd: Path | None = None,
-            timeout: float | None = None, stream: bool | None = None) -> "Result":
-        """Run cmd, tee combined stdout+stderr to NN-<name>.log (always) and the console (when streaming)."""
+            timeout: float | None = None, stream: bool | None = None, show: bool = False) -> "Result":
+        """Run cmd, tee combined stdout+stderr to NN-<name>.log (always) and the console (when streaming).
+        show=True echoes every line to the console at INFO (a server: the user wants to see startup progress and READY)."""
         self.step += 1
         logfile = self.dir / f"{self.step:02d}-{re.sub(r'[^A-Za-z0-9_.-]+', '_', name)}.log"
         stream = self.verbose if stream is None else stream
@@ -236,9 +237,9 @@ class Run:
             for line in proc.stdout:
                 out.append(line)
                 lf.write(line)
-                if stream:
-                    log.debug("    | %s", line.rstrip("\n"))
-                if time.monotonic() - last_hb >= 30:      # quiet console (no -v): one heartbeat line per 30 s, details stay in the log
+                if stream or show:
+                    (log.info if show else log.debug)("    | %s", line.rstrip("\n"))
+                if not show and time.monotonic() - last_hb >= 30:      # quiet console (no -v): one heartbeat line per 30 s, details stay in the log
                     last_hb = time.monotonic()
                     log.info("    ... %s still running (%.0fs, %d output lines) -> %s", name, time.monotonic() - t0, len(out), logfile.name)
             proc.stdout.close()
@@ -1255,7 +1256,7 @@ def cmd_serve(run: Run, args) -> int:
     extra = args.extra[1:] if args.extra[:1] == ["--"] else args.extra
     cmd = serve_command(str(venv_python()), str(model), args.port, args.ctx, extra)
     log.info("serving: %s", " ".join(_q(c) for c in cmd))
-    r = run.run(cmd, "serve", env=env, cwd=REPO, stream=True)
+    r = run.run(cmd, "serve", env=env, cwd=REPO, stream=True, show=True)
     run.add(Check("serve", INFO, f"server exited {describe_exit(r.code)}", {"log": r.logfile.name, "tail": r.tail(40)}))
     return run.summary()
 

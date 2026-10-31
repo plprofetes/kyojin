@@ -1,6 +1,6 @@
 # End-to-end smoke: load the pack, prefill, decode 16 tokens
 
-- Status: active
+- Status: done
 - Depends: S2-02, S1-05
 - Risk: HIGHEST in this sprint: integrates everything and will surface failures in code that has never run on Windows.
 
@@ -24,6 +24,7 @@ No new script. Use what exists and undo with `git checkout`.
 
 - 2026-10-30: first generated tokens on Windows through `serve` (see [S4-03](../s4-serve-qwen/03-chat-completion.md)): coherent 8-token answer "2+2 equals 4." **[V]**. Done-when asks for 16 tokens from a fixed prompt saved in the run folder: not yet. No `libamdhip64.so` / hipcc error appeared, so [S3-02](02-hip-lib-windows.md) was not needed for this path **[I]** (the JIT HIP kernels may be off by default or untouched by this model; revisit when they are enabled).
 - 
+- 2026-10-31: done-when met with more than asked: greedy 48-token answer saved as `outA.json`/`outB.json` (ids and logprobs), 200-token and 223-token answers, Qwen3.5-9B 4.00bpw and Qwen3.8-27B 4.00bpw both generate on Windows **[V]**. See S3-05 and the journal.
 
 **Links.** [exllamav3 package](../../../../exllamav3) · [qwen3_5 architecture](../../../../exllamav3/architecture/qwen3_5.py) · next: [S3-02](02-hip-lib-windows.md)
 

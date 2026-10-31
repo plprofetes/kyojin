@@ -183,3 +183,9 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 ## 2026-10-30: JIT kernel list (S3-03)
 
 - `%USERPROFILE%\.cache\exllamav3` holds `gdn_hf_gfx1151_bfe9e89a80c14757.hsaco` (28,288 B) and `ple_gfx1151_a080d964d7fd73d4.hsaco` (34,392 B), both 31.10.2026 00:16:21-22, i.e. built by the first `serve` after the `hipcc.exe` fix **[V]**. No `gr_mix_*` or `qsa_pf_*` file for this dense 9B pack **[V]**; why is not established **[?]**.
+
+## 2026-10-31: S3-05 parity A/B identical; startup 99 s vs 24 s; HOME for the tune caches
+
+- A/B (HIP kernels on vs the fallback path, greedy, 48 tokens, ids and logprobs): `choices[0]` **identical** **[V: user's comparison]**. S3-05 done at that scope (see the task file).
+- Startup: A 99 s, B 24 s **[V: user report]**. The difference is presumably the dense-GEMM warm-up/tuning (`warm_dense_gemm`: 93 s, "tune budget 90 s used") that only the HIP chain runs **[I]**; B does not tune, A does, and A did not get faster on its second launch (104 s, then 99 s), i.e. the tune cache is not being reused.
+- Likely cause **[I, from the code comments]**: the tune file is `$HOME/.cache/exllamav3/dense_gemm_tune.txt` (`hgemm.cu:165-173`, `dense_warmup.py`), `/tmp` when `HOME` is unset, and `serve` did not set `HOME` (only `build` did): on Windows that is `<drive>:\tmp\.cache\...`, where the non-recursive `_mkdir` can fail. Fix: `serve` sets `HOME=%USERPROFILE%` (setdefault). To verify on the next launch: `dense_gemm_tune.txt` appears in `%USERPROFILE%\.cache\exllamav3` and the launch after that is fast.

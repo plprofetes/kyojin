@@ -1224,6 +1224,7 @@ def cmd_serve(run: Run, args) -> int:
     root = sdk.details.get("root")
     env = dict(os.environ)
     env["PYTHONPATH"] = str(REPO) + os.pathsep + env.get("PYTHONPATH", "")
+    env.setdefault("HOME", env.get("USERPROFILE", ""))   # tune caches (hgemm.cu dtune, dense_warmup.py, util/tune_cache.py) use $HOME/.cache/exllamav3, else /tmp = <drive>:\\tmp
     env.setdefault("PYTHONUTF8", "1")      # cp1250 locale: serve.py and loaders call read_text() without encoding (instead of tools_qwen_serve_py.patch)
     if root:
         env["EXL3_ROCM_SDK"] = root       # util/hip_compiler.py resolves hipcc from this; ROCM_PATH/HIP_PATH deliberately not set at runtime

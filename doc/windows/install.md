@@ -44,7 +44,7 @@ Use a pack that includes the MTP head if you want speculative decoding; turboder
 uv run --no-project python scripts/windows/kyojin_win.py serve --model C:\models\qwen38-27b-4bpw -- --draft-policy mtp
 ```
 
-`serve` runs `tools/qwen/serve.py` with `-c 8192 --no-vision --draft-policy off`; anything after `--` is passed through and overrides those defaults. The first start takes minutes (Triton, HIP kernels and the dense-GEMM tuning are built and cached; the second start took 9 s on the 9B pack **[V]**). Wait for `qserve: READY`.
+`serve` runs `tools/qwen/serve.py` with `-c 8192 --no-vision --draft-policy off`; anything after `--` is passed through and overrides those defaults. The first start takes minutes (Triton, HIP kernels and the dense-GEMM tuning are built and cached; the second start took 9 s on the 9B pack **[V]**). Wait for `qserve: READY`; until then the port already answers, but chat requests get `503 {"error": {"message": "Loading model"}}` and `/health` reports loading **[V]**.
 
 Ask it something. PowerShell strips quotes inside `-d '...'`, so put the JSON in a file, quote `@file`, and use the served model id (`/v1/models`):
 

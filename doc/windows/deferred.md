@@ -36,7 +36,7 @@ Legend: **[V]** verified, **[I]** inferred, **[?]** unknown (see the assessment)
 
 | Item | Why deferred | Revisit when |
 |---|---|---|
-| CI job for Windows (`windows_rocm_smoke`) | No point before the local script is green. Runner disk (about 14 GB free on C:) vs 12 GB SDK is a known problem **[?]**. | Sprint 5 |
+| CI job for Windows (`windows_rocm_smoke`) | Disk is not the blocker (venv 8.7 GB + build 0.2 GB + caches 0.7 GB measured). Hosted runners have no gfx1151 GPU, so CI could only verify setup + build + CPU-side import, not `check`/`serve`; build time on a hosted runner is unmeasured **[?]**. The local script is the gate. | If a self-hosted Windows runner with the GPU exists, or a build-only job is wanted; try it as a manual `workflow_dispatch` first |
 | Prebuilt wheels / PyPI / releases | POC is source build. | After Sprint 5 |
 | `uv.lock` / pinned Windows requirements | First run produces `pip-freeze.txt`; pin from a known-good one. | Sprint 5 |
 | sccache / compile cache | Optimisation. | If rebuild time hurts (it will) |

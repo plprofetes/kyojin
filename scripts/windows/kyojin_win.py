@@ -1102,6 +1102,17 @@ def build_env(run: Run, sdk: Check) -> dict[str, str] | None:
     return sdk_env(Path(root), dict(os.environ))
 
 
+def remove_venv() -> Check | None:
+    """Delete .venv-win; a Check FAIL when a file is held open (a running `serve` keeps torch's .kpack/.dll files mapped)."""
+    try:
+        shutil.rmtree(VENV)
+    except OSError as e:
+        return Check("venv_delete", FAIL, f"cannot delete {VENV}: {e}", {"file": str(getattr(e, "filename", None))},
+                     "stop the running server and every python.exe that uses .venv-win (Task Manager > Details, or `Get-Process python*`), then run `setup --recreate` again; "
+                     "the venv is now partly deleted, which `setup --recreate` repairs")
+    return None
+
+
 def cmd_setup(run: Run, args) -> int:
     host_probes(run)
     if any(c.status == FAIL for c in run.checks):
@@ -1113,7 +1124,10 @@ def cmd_setup(run: Run, args) -> int:
         ([uv, "python", "install", "--no-config", PY_VER], "uv-python-install"),
     ]
     if args.recreate and VENV.exists():
-        shutil.rmtree(VENV)
+        bad = remove_venv()
+        if bad:
+            run.add(bad)
+            return run.summary()
     if not venv_python().is_file():
         steps.append(([uv, "venv", *UV_FLAGS, str(VENV), "--python", PY_VER], "uv-venv"))
     py = str(venv_python())

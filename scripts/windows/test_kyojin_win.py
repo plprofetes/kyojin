@@ -70,6 +70,15 @@ class Pure(unittest.TestCase):
         self.assertEqual(kw.known_tag(obs), "")
         self.assertIn("hypothesis", kw.known_tag(hyp))
 
+    def test_remove_venv_reports_a_locked_file(self):
+        from unittest import mock
+        with mock.patch.object(kw.shutil, "rmtree", side_effect=PermissionError(32, "in use", "torch_gfx1151.kpack")):
+            c = kw.remove_venv()
+        self.assertEqual((c.name, c.status), ("venv_delete", kw.FAIL))
+        self.assertIn("stop the running server", c.hint)
+        with mock.patch.object(kw.shutil, "rmtree"):
+            self.assertIsNone(kw.remove_venv())
+
     def test_pick_vs(self):
         self.assertIsNone(kw.pick_vs("[]"))
         self.assertIsNone(kw.pick_vs("not json"))

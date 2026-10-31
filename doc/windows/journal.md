@@ -245,3 +245,8 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 ## 2026-10-31: S4-05 done; Sprint 4 complete
 
 - Distinct-prompt soak: 4 x 4,207 prompt tokens, prefill 523-558 tok/s, decode 19-28 tok/s, all finished, GPU memory 20.58 GiB (was 20.18 at the start of the soak) **[V]**. Sprint 4 (serve a small Qwen over HTTP): all five tasks done. Open elsewhere: S2-03 (Linux build check), S5-01 (clean machine), S5-03 (recreate comparison), plus the optional larger-model and speed items in Sprint 6.
+
+## 2026-10-31: `serve` console showed only heartbeats
+
+- User: "qwen's serve console log is truncated?" Not truncated: without `-v` the script prints one heartbeat per 30 s and writes the server output to `03-serve.log` only (quiet console is a project rule, set for the build). For a server that hides startup progress and `READY`. `Run.run(..., show=True)` now echoes every line at INFO; `serve` uses it, so the console shows the server output without `-v` (the other commands are unchanged). Unit test added.
+- The user interrupted a 27B start at about 7 minutes (cold caches for the 27B shapes: Triton/HIP/tune work); the earlier first 27B start was not timed in this log **[?]**.

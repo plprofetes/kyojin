@@ -79,6 +79,16 @@ class Pure(unittest.TestCase):
         with mock.patch.object(kw.shutil, "rmtree"):
             self.assertIsNone(kw.remove_venv())
 
+    def test_run_show_echoes_output_at_info(self):
+        with tempfile.TemporaryDirectory() as t:
+            run = kw.Run("unit", verbose=False, root=Path(t))
+            try:
+                with self.assertLogs(kw.log, level="INFO") as cm:
+                    run.run([sys.executable, "-c", "print('qserve: READY')"], "showtest", show=True)
+                self.assertTrue(any("qserve: READY" in m for m in cm.output))
+            finally:
+                run.close()
+
     def test_pick_vs(self):
         self.assertIsNone(kw.pick_vs("[]"))
         self.assertIsNone(kw.pick_vs("not json"))

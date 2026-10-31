@@ -20,5 +20,5 @@ Status is edited in each task file; this table is generated: `python scripts/win
 |---|---|---|---|---|
 | 1 | S2-01 | [Full extension build: triage compile and link errors](01-full-build-triage.md) | done | S1-02 |
 | 2 | S2-02 | [Import the extension: DLL search path](02-import-and-dll-resolution.md) | done | S2-01 |
-| 3 | S2-03 | [Linux no-regression check for the setup.py changes](03-linux-no-regression.md) | todo | S2-01 |
+| 3 | S2-03 | [Linux no-regression check for the setup.py changes](03-linux-no-regression.md) | active | S2-01 |
 <!-- tasks:end -->

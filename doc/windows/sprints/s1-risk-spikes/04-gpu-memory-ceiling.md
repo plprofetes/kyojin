@@ -1,6 +1,6 @@
 # Measure GPU-addressable memory on Windows
 
-- Status: active
+- Status: done
 - Depends: S1-01
 - Risk: MEDIUM probability, HIGH impact on product fit, very cheap to learn. Windows WDDM exposes unified memory differently from Linux GTT; the answer sets the model-size ceiling.
 
@@ -32,7 +32,8 @@ No script. Paste into a Python prompt (`.venv-win\Scripts\python`); nothing is c
 **Evidence.** (run folders, versions, numbers; fill in)
 
 - 
-- 2026-10-31, server stopped, nothing else on the GPU (user), torch 2.15.0a0+rocm10.1.0a20260822, hip 7.16.26332: `mem_get_info` free/total 107.72 / 107.87 GiB. Allocating `torch.ones(2**30, uint8)` chunks (memory touched): **OOM after 75 GiB**, with the driver reporting 32.70 GiB free (`free: 35113152512, total: 115822460928` bytes in the allocator warning). After `del` and `empty_cache`, **single allocations of 24, 32, 48, 64 and 80 GiB all succeeded** (80 GiB was the largest tried) **[V: user's output]**. So 1 GiB chunks stop at 75 GiB although at least 80 GiB can be held as one block: the limit is not the 107.87 GiB that torch reports, and it is not simply "free memory" **[I]**. Not recorded yet: BIOS/Adrenalin graphics-memory setting, driver version, Task Manager dedicated/shared totals, and whether the chunk size changes the ceiling.
+- 2026-10-31, server stopped, nothing else on the GPU (user), torch 2.15.0a0+rocm10.1.0a20260822, hip 7.16.26332: `mem_get_info` free/total 107.72 / 107.87 GiB. Allocating `torch.ones(2**30, uint8)` chunks (memory touched): **OOM after 75 GiB**, with the driver reporting 32.70 GiB free (`free: 35113152512, total: 115822460928` bytes in the allocator warning). After `del` and `empty_cache`, **single allocations of 24, 32, 48, 64 and 80 GiB all succeeded** (80 GiB was the largest tried) **[V: user's output]**. This first run is **superseded** by the second below: something else probably held about 25 GiB during it (the allocator warning showed 32.70 GiB free at the OOM, 107.72 free at the start) **[?]**; it was not investigated. Not recorded yet: BIOS/Adrenalin graphics-memory setting, driver version, Task Manager dedicated/shared totals, and whether the chunk size changes the ceiling.
+- 2026-10-31, second sweep, idle GPU, same torch: chunks of 256 MiB reach **101.75 GiB** before OOM, 1 GiB chunks **101.0 GiB**, 4 GiB chunks **100.0 GiB**; single allocations **88 GiB ok, 96 GiB FAIL** (OutOfMemoryError) **[V: user's output]**. So the usable GPU memory is about **100 GiB of the 107.87 GiB** torch reports (about 93 %), nearly independent of chunk size, and one block can be somewhere between 88 and 95 GiB. This is the S1-04 number. Not recorded: BIOS/Adrenalin graphics-memory setting, driver version, Task Manager dedicated/shared totals (earlier, with GLM running: dedicated 95.2/95.8 GB, shared 2.4/15.8 GB).
 
 
 **Links.** [existing torch probe output](../../../../scripts/windows/kyojin_win.py) · [expert tiering code that assumes Linux memory](../../../../exllamav3/util/memory.py) · next: [S1-05](05-model-pack-on-disk.md)

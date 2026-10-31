@@ -221,3 +221,8 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 
 - `doc/windows/install.md` written from the journal (prerequisites, install, model + MTP, request quoting, measured numbers, limits, what to send) and linked from the main README and `doc/windows/README.md`. Not validated on a clean machine (S5-01).
 - Error catalogue: `OBSERVED` set (10 of 43); unobserved signatures are printed as hypotheses. `winsock-provider` text still names the old causes; revise it when convenient.
+
+## 2026-10-31: correction: GPU memory ceiling is about 100 GiB (S1-04 done)
+
+- Second sweep on the idle GPU: 256 MiB / 1 GiB / 4 GiB chunks reach 101.75 / 101.0 / 100.0 GiB; single block 88 GiB ok, 96 GiB FAIL **[V]**. The first sweep (OOM at 75 GiB, 32.7 GiB reported free) is superseded: probably another consumer held memory then **[?]**. My earlier conclusion that an 85 GiB pack would not fit was based on that run and is withdrawn; `install.md`, S1-04 and `deferred.md` corrected.
+- Consequence: Qwen3.8-Flash-Next (84.5 GiB weights) plus KV cache could fit in about 100 GiB, leaving about 15 GiB; not tried. Decode of an 84.5 GiB dense-equivalent read would be bandwidth-bound at a few tok/s unless it is MoE (active experts only) **[I]**.

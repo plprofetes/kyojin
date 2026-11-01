@@ -2645,7 +2645,8 @@ static void dec_gemv_r_impl
     at::Tensor& scratch,
     at::Tensor& counters,
     const std::vector<double>& K,
-    bool mcg
+    bool mcg,
+    int64_t strips_hint = 0     // > 0: pick ktw as if the launch had this many strips (the strips of ONE equivalent single call)
 )
 {
     const at::cuda::OptionalCUDAGuard device_guard(x.device());
@@ -2664,7 +2665,11 @@ static void dec_gemv_r_impl
     // this is what makes the block-reduce partition, and so the rounding, match batch-1 exactly.
     const int min_blocks = env_int("EXL3_DEC_MIN_BLOCKS", 32);
     const int forced = env_int("EXL3_DEC_KTW", 0);
-    const int ktw = pick_ktw(Kdim / 16, strips_total, ring_of_kb2(kb2), min_blocks, forced);
+    // strips_hint (as in dec_gemv_impl) keeps ktw the per-matrix value when matrices that plain decode launches
+    // separately are fused here (mlp.py gate+up): otherwise a min_blocks threshold between 1x and 2x the strips
+    // gives verify another ktw than plain decode, hence another rounding. strips_total stays the real grid for WIDE8.
+    const int strips_pick = strips_hint > 0 ? (int) strips_hint : strips_total;
+    const int ktw = pick_ktw(Kdim / 16, strips_pick, ring_of_kb2(kb2), min_blocks, forced);
     const int kbs = kbs_of(Kdim / 16, ktw, env_int("EXL3_DEC_KBS", 0));
     // EXL3_GEMV_R_RPB caps rows per block (grid.y = ceil(R / rpb) row chunks, each re-reading the
     // weights). Null result (glm-mtp step 4): RM 4 spills a little at KB2 >= 8 but a cap of 1 or 2
@@ -2788,10 +2793,11 @@ void exl3_dec_gemv_r_multi
     at::Tensor& scratch,
     at::Tensor& counters,
     const std::vector<double>& K,
-    bool mcg
+    bool mcg,
+    int64_t strips_hint
 )
 {
-    dec_gemv_r_impl(x, trellis, suh, svh, out, scratch, counters, K, mcg);
+    dec_gemv_r_impl(x, trellis, suh, svh, out, scratch, counters, K, mcg, strips_hint);
 }
 
 void exl3_dec_gemv_r

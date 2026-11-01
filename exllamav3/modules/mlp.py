@@ -776,7 +776,9 @@ class GatedMLP(Module):
                     scratch, counters = dec_workspace(x.device)
                     ext.exl3_dec_gemv_r_multi(
                         x.view(rows, dim), [gi.trellis, ui.trellis], [gi.suh, ui.suh], [gi.svh, ui.svh],
-                        [g.view(rows, -1), u.view(rows, -1)], scratch, counters, [gi.K, ui.K], False)
+                        [g.view(rows, -1), u.view(rows, -1)], scratch, counters, [gi.K, ui.K], False,
+                        # ktw/kbs of ONE gate call, as plain decode launches gate and up separately (bit-equal rounding)
+                        (gi.out_features + 511) // 512)
                     a = torch.empty_like(u, dtype = torch.half) if self.interm_dtype != torch.half else u
                     self.activation_fn_call(g, u, a, self.act_limit)
                     d_ = self.downs[s].forward(a, params, torch.half if nc2_half else None)

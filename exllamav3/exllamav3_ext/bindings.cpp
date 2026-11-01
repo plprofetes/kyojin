@@ -183,7 +183,8 @@ static void bind_exl3_dec(py::module_& m)
           py::arg("scratch"), py::arg("counters"), py::arg("K"), py::arg("mcg") = false);
     m.def("exl3_dec_gemv_r_multi", &exl3_dec_gemv_r_multi, "exl3_dec_gemv_r_multi",
           py::arg("x"), py::arg("trellis"), py::arg("suh"), py::arg("svh"), py::arg("out"),
-          py::arg("scratch"), py::arg("counters"), py::arg("K"), py::arg("mcg") = false);
+          py::arg("scratch"), py::arg("counters"), py::arg("K"), py::arg("mcg") = false,
+          py::arg("strips_hint") = 0);
     m.def("exl3_dec_router_norm", &exl3_dec_router_norm, "exl3_dec_router_norm");
     m.def("exl3_dec_router", &exl3_dec_router, "exl3_dec_router");
     m.def("exl3_dec_router_rows", &exl3_dec_router_rows, "exl3_dec_router_rows");

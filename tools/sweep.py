@@ -83,11 +83,26 @@ def default_arms() -> list[dict]:
     return arms + EXTRA_ARMS
 
 
-def prompt(txt: str, depth: int, salt: int) -> str:
-    """~depth tokens of real text at an offset fixed by (depth, salt): the same prompt in every run, another one for warm-up."""
-    n = int(depth * 4.2)
+def tokenizer(model: str):
+    """The pack's tokenizer.json via `tokenizers` (in the venv); None -> prompt() falls back to 4.2 chars per token."""
+    try:
+        from tokenizers import Tokenizer
+        return Tokenizer.from_file(str(Path(model) / "tokenizer.json"))
+    except Exception:  # noqa: BLE001 - optional
+        return None
+
+
+def prompt(txt: str, depth: int, salt: int, tok=None) -> str:
+    """~depth tokens of real text at an offset fixed by (depth, salt): the same prompt in every run, another one for warm-up.
+    Chars per token of the calibration text runs 3.2 (code) to 5.1 (prose), so with a tokenizer the text is cut at the exact
+    token count (minus ~60 for the chat template and the instruction); without one, 4.2 chars per token."""
+    n = int(depth * 5.2) if tok else int(depth * 4.2)
     off = (104729 * (salt + 1) + 7919 * depth) % (len(txt) - n - 1)
-    return txt[off:off + n] + "\n\nWrite a long, detailed continuation of the text above (at least 300 words)."
+    body = txt[off:off + n]
+    if tok:
+        offs = tok.encode(body).offsets
+        body = body[:offs[depth - 60 - 1][1]]
+    return body + "\n\nWrite a long, detailed continuation of the text above (at least 300 words)."
 
 
 def post(url: str, body: dict | None = None, timeout: float = 3600):
@@ -108,7 +123,7 @@ def stop(proc: subprocess.Popen) -> None:
         proc.kill()
 
 
-def measure(a, out: Path, env_over: dict, tag: str, txt: str) -> dict:
+def measure(a, out: Path, env_over: dict, tag: str, txt: str, tok=None) -> dict:
     """One fresh server: load, warm up every depth, measure every depth, stop."""
     env = {k: v for k, v in os.environ.items() if not KNOB.match(k) or k in KEEP}
     env.update(PYTHONPATH=str(REPO), PYTHONUTF8="1", QSERVE_LOG_VRAM="1", **env_over)
@@ -136,7 +151,7 @@ def measure(a, out: Path, env_over: dict, tag: str, txt: str) -> dict:
             for d in a.depths:
                 size = logf.stat().st_size
                 r = post(url + "/v1/chat/completions", {"model": model_id, "max_tokens": max_tokens, "temperature": 0,
-                         "enable_thinking": False, "messages": [{"role": "user", "content": prompt(txt, d, salt)}]})
+                         "enable_thinking": False, "messages": [{"role": "user", "content": prompt(txt, d, salt, tok)}]})
                 if salt:
                     continue
                 for _ in range(20):   # the stats line follows the reply
@@ -211,6 +226,9 @@ def cmd_run(a) -> int:
     done = {r["tag"] for r in map(json.loads, res.read_text(encoding="utf8").splitlines()) if r["status"] == "ok"} if res.exists() else set()   # failed runs are retried
     txt = "".join((REPO / "exllamav3" / "conversion" / "standard_cal_data" / n).read_text(encoding="utf8")
                   for n in ("wiki.utf8", "c4.utf8", "technical.utf8", "code.utf8"))
+    tok = tokenizer(a.model)
+    if tok is None:
+        print("WARNING: no `tokenizers` package or tokenizer.json: prompts use 4.2 chars per token and may miss the depth")
     deadline = time.time() + a.max_hours * 3600
     fails = 0
     if (out / "NON_DEFAULT_BUILD").exists() and not build(out, DEFAULT_DEFINES):
@@ -227,7 +245,7 @@ def cmd_run(a) -> int:
                 + "; run the same command again to continue")
             return False
         log(out, f"r{rnd} {name} {env_over}")
-        rec = measure(a, out, env_over, tag, txt)
+        rec = measure(a, out, env_over, tag, txt, tok)
         rec.update(arm=name, round=rnd, build=defines)
         fails = fails + 1 if rec["status"] != "ok" else 0
         with open(res, "a", encoding="utf8") as f:

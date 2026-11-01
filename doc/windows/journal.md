@@ -334,3 +334,14 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - **What is established (details in S6-08):** Qwen3.8-27B plain decode is about 7 ms/token slower here than upstream (12.7 vs 14.0 tok/s) while prefill is 19-24% faster (421-472 vs 354-381 tok/s) **[V]**, both with fp16 KV (4.00 GiB at 64K on all three engines, verified). The gate/up GEMV (5120 -> 17408, K = 4) is 218.0 us here vs 201.9 us upstream (fresh-process interleaved repeats, n = 4), and `EXL3_DEC_MIN_BLOCKS=192` alone takes it to 209.3 us but a global value costs 3-14% on other shapes, so tiling has to be per shape **[V]**. Not the driver or the torch/HIP stack **[V]**. Upstream's single-row path is the autotuned `exl3_gemm`, which this fork's ROCm build excludes; a port needs 6 of upstream's `rocm/` files (1,889 lines) plus 2 shared headers and an isolated vendored subtree (about 3-5 days) **[I]**.
 - **Corrections made on the way (so they are not repeated):** per-token bytes read are about 13.6 GB (not the 16.9 GB pack), so the bandwidth floor is about 58 ms and both engines are well below it; "about 135 GB/s" in the README is a small-kernel rate, not a ceiling; the lag-1 decode pipeline excludes recurrent caches (does not apply to Qwen3.5/3.8 hybrids).
 - Nothing in this repo's code was changed; no build was run here.
+
+## 2026-11-01: S6-08 autotuner evaluation (static, no GPU) and execution plan
+
+- **Regression check:** no kernel, module or model code changed since the fork's root (`1d0ad27`). The recent code commits are Windows setup, serve and build glue only **[V, git log]**. The 12.7 vs 14.0 tok/s decode gap is structural, not a regression.
+- **Premise corrected:** upstream's 1-row decode on ROCm does not reach `CoopKernelAutotuner`. `exl3_gemm_gr` first routes 1 <= m <= 8 to the RDNA multirow GEMV (`rocm/quant/exl3_gemv_multirow_rdna.cu`, row tile 1, grid 544 x 4 waves on gate/up, in-block split-K only, input rotated once into L2) **[V, upstream `a3bfbfd0` source]**. **Porting the autotuner: no-go.**
+- **Hazard found:** `dec_gemv_r_impl` keys `pick_ktw` on the strips of all fused matrices. With `EXL3_VERIFY_FUSE=1`, fused gate+up verify and unfused plain decode can pick different ktw, which breaks plain == speculative bitwise (for example the global `EXL3_DEC_MIN_BLOCKS=192` on the 27B) **[I, from code]**.
+- **Plan:** [plan-08-decode-gemv.md](sprints/s6-scale-and-speed/plan-08-decode-gemv.md).
+  - Phase 1: attribute the 15 us with the existing `QWG_ABLATE` build and `EXL3_DEC_PF=1`.
+  - Phase 2 (Path T): per-matrix split key, ragged `EXL3_DEC_KBS` sweep, static per-shape table, fused plain gate+up.
+  - Phase 3 (Path M, only if needed): vendor upstream's multirow GEMV (16 files / 5,498 lines of closure, no cooperative launch), routed for rows 1-8 together.
+- Nothing was built or run; no code changed.

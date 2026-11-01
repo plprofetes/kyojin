@@ -170,6 +170,8 @@ The operator asked that the next session in this repo **evaluate porting upstrea
 
 You are on the target machine (Windows 11, gfx1151, `.venv-win` built), on branch `claude/modest-rubin-p69b5g`. The evaluation above and the plan were written without a GPU. **Every performance number in them is from earlier operator runs or is [I].** Your job is to turn the plan's first phase into measurements and a decision.
 
+**Update (2026-11-01, later): `tools/sweep.py` automates step 2 below and much more** (every `SERVE_ENV` switch, the `EXL3_DEC_*` runtime switches and the five build flags, on 4K and 16K prompts, unattended, resumable). Run it first; see [doc/benchmarks/sweeps/README.md](../../../benchmarks/sweeps/README.md). Steps 3-5 below (bit-identity gate, occupancy, per-shape time) remain manual.
+
 **Read first (in this order, ~20 min):**
 1. [plan-08-decode-gemv.md](plan-08-decode-gemv.md): §0 (corrected premise, kernel comparison, the four invariants, measurement rules), §6 (Path A, the preferred route), §1 (decision tree), §2 (Phase 1).
 2. The "Evaluation" section above (the regression check and the bit-identity hazard).

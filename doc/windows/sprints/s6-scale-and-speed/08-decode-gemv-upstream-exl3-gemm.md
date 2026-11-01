@@ -104,7 +104,7 @@ One variable closes 54% of the gap. It is **global**, though: per-shape sweep wi
 - Translation units: `exl3_gemm.cu`, `coop_autotune.cu`, `exl3_kernel_map.cu` and the three K = 4 comp units; the kernel map references every K, so trim it to K = 4 or compile all 24 + 3 comp units.
 - **Option A: about 3-5 working days** (vendoring and glue 1; compile/link debugging 1-2 at about 12 min per full build; validation 1 including plain == speculative, the TTFT table and a TDR soak). **Option B: about 1-2 days** (per-shape sweep over the nine shape classes, a small table or start-up autotune in `pick_ktw`, one rebuild, same validation). Do B first; do A only if B leaves a gap worth the extra days.
 
-## Next session: evaluate porting the autotuner (operator instruction, 2026-11-01)
+## Previous handoff: evaluate porting the autotuner (operator instruction, 2026-11-01; done, see Evaluation below)
 
 The operator asked that the next session in this repo **evaluate porting upstream's autotuner at least** (written "autoevaluator"; read as upstream's `CoopKernelAutotuner`, the per-shape launch-config selection in `quant/coop_autotune.cu` and `quant/exl3_gemm.cu`). The evaluation is the deliverable: a written go/no-go in the journal and in this task's Evidence. Implement only on a go, and ask before adding any new script, tool or subcommand (`scripts/windows/CLAUDE.md`).
 
@@ -165,6 +165,62 @@ The operator asked that the next session in this repo **evaluate porting upstrea
 5. **Only if a gap above about 5 us/call remains: Option A' = port upstream's multirow GEMV.** This replaces Option A as written above. The include closure of `rocm/quant/exl3_gemv_multirow_rdna.cu` is **16 files / 5,498 lines**: 8 absent here (`rocm/quant/exl3_gemv_{multirow_rdna.cu,multirow_rdna.cuh,kernel_rdna.cuh,tiles_rdna.cuh}`, `exl3_mgemv_rdna.cuh`, `rocm/ptx_rocm.cuh`, `ptx_portable.cuh`, `arch.cuh`), 6 diverged (`ptx.cuh`, `exl3_dq.cuh`, `codebook.cuh`, `util.cuh`, `graph.cuh`, `compat.cuh`), 2 identical. It also needs about 4 host helpers from `rocm/quant/exl3_gemv_rdna.cu` (`exl3_gemv_splitk_warps`, `_core_mode`, `_tiles_tpb`, `_fuse_out_enabled`). It needs **no cooperative launch, no device barrier and no autotuner**, so the TDR/co-residency risk listed above does not apply. Vendor it as an isolated subtree, as the Effort section says, and route m = 1 behind a switch. Its m = 2..8 form is bit-identical per row to its own m = 1 form, so routing verify rows 2-8 through it as well keeps plain == speculative. It is also upstream's faster path in E5's 4-8-row band. **Estimate: 2-3 days**, versus 3-5 days for the cooperative-GEMM port: no comp units, no kernel map, no `rdna_wmma`.
 
 **Priority note (MoE).** Steps 1-4 apply to every dense decode GEMV, which is 40% of the bytes in a Flash-Next-class forward. The routed-expert kernels (`exl3_dec` MoE A/B, `EXL3_DEC_MOE_*` knobs) use the same `pick_ktw`/`kbs_of` and the same ragged split, so the step 1 sweep method transfers directly. Upstream's equivalent there is `exl3_rocm_moe_decode` (`exl3_gemv_multirow_rdna.cuh`), worth the same structural comparison before any MoE kernel work.
+
+## Next session: HANDOFF to the local GPU agent (2026-11-01)
+
+You are on the target machine (Windows 11, gfx1151, `.venv-win` built), on branch `claude/modest-rubin-p69b5g`. The evaluation above and the plan were written without a GPU. **Every performance number in them is from earlier operator runs or is [I].** Your job is to turn the plan's first phase into measurements and a decision.
+
+**Read first (in this order, ~20 min):**
+1. [plan-08-decode-gemv.md](plan-08-decode-gemv.md): §0 (corrected premise, kernel comparison, the four invariants, measurement rules), §6 (Path A, the preferred route), §1 (decision tree), §2 (Phase 1).
+2. The "Evaluation" section above (the regression check and the bit-identity hazard).
+3. `quant/exl3_dec.cu`: `lane_gemv` (~378), `pair_dot`/`mul1_pair` (~115-300), `gemv_kernel` (~784), `block_reduce` (~633), `pick_ktw`/`kbs_of` (~2013), `dec_gemv_impl` (~2266), `dec_gemv_r_impl` (~2637).
+
+**What is settled (do not redo):**
+- Porting `CoopKernelAutotuner`: no-go. Upstream's 1-row ROCm path never reaches it [V, source].
+- No code regression in this fork [V, git log]; the gap is structural.
+- A global `EXL3_DEC_MIN_BLOCKS` is not the fix (operator, [V]).
+
+**This session's scope: plan Phase 1 plus Path A's flag builds. Nothing else.**
+
+1. **Baseline.** Reproduce E2 (gate/up us/call, production path) and the generator-loop tok/s with the default build. Record versions, driver, power state, and the repo commit plus dirty-path count (the `kyojin_win.py` run folder records both).
+2. **Flag builds.** Bit-identical by design, one rebuild each (~12 min). `EXL3_HIP_DEFINES` **replaces** the default `EXL3_HIP_STG_PAD` (`kyojin_win.py:64`, `setup.py:70`), so always keep it in the list. Use `--clean`, because the Windows build does not track header or define changes reliably ([install.md](../../install.md)):
+
+   ```powershell
+   $env:EXL3_HIP_DEFINES = "EXL3_HIP_STG_PAD EXL3_DEC_PROD=2"                  # A1: full-rate hash multiply (mul1 only)
+   uv run --no-project python scripts/windows/kyojin_win.py build --clean
+   $env:EXL3_HIP_DEFINES = "EXL3_HIP_STG_PAD EXL3_DEC_PF=1"                    # A6: one-tile prefetch
+   $env:EXL3_HIP_DEFINES = "EXL3_HIP_STG_PAD EXL3_DEC_PROD=2 EXL3_DEC_PF=1"    # both
+   $env:EXL3_HIP_DEFINES = "EXL3_HIP_STG_PAD QWG_ABLATE=1"                     # attribution only: garbage outputs; run with EXL3_QWG_DABL=0,1,2,3,4
+   Remove-Item Env:EXL3_HIP_DEFINES                                           # back to the default before you finish
+   ```
+
+   - If PF = 1 or PROD = 2 helps, also try `EXL3_DEC_SB` in {2, 8} with the winner (default 4).
+   - First find out which codebook the 27B and the Qwen3-30B-A3B packs use (mcg or mul1). A1 does nothing for mcg **[I]**.
+3. **Bit-identity gate for each non-ablation build.** Fixed inputs, real gate/up/down weights plus one R = 4 `exl3_dec_gemv_r` call, saved per build and compared with `torch.equal` against the default build.
+   - Use the operator's `kverify.py` (`wsl setup` repo) if it compares outputs bitwise.
+   - Otherwise, **ask the operator** before extending `tools/decode/test_dec.py` with a dump/compare mode (editing an existing tool is allowed, but say so first).
+   - Any mismatch: stop and report the build and the shape.
+4. **Occupancy facts** (plan §2.1): VGPR, SGPR and LDS of `gemv_kernel<8, CB>` for each build, from the code object. Also read the VGPR file size per SIMD for gfx1151 from `rocminfo`/ISA docs; it is **[?]**.
+5. **Per-shape time** for each build, with the E2 method (24-layer round-robin, fresh interleaved processes, n >= 4, median and range): gate/up, down, and the q/k/v and GDN **multi launches as production groups them**, not single matrices.
+
+**Report (append to this task's Evidence and to the journal):**
+- one table: build x shape -> us/call (median, range) and GB/s
+- the ablation arms for gate/up, down and the smallest shape
+- VGPR/LDS/occupancy per build
+- bit-identity PASS/FAIL per build
+- generator-loop tok/s for the best build
+
+**Decision to write down** (plan §1/§6.3):
+- If a flag build wins with no bit change, propose flipping the default in `exl3_dec.cu` (one line). **Ask the operator first**, because the default also affects MoE (`exl3_dec_moe*` share `tile_dot`). Re-measure Qwen3-30B-A3B before flipping.
+- Then name the next step: A5(a) barrier removal, the Phase 2 table (which needs the §3.1 split-key fix first), or Path M. Base the choice on what the ablation says limits the kernel.
+
+**Out of scope this session:** source changes beyond a default flip, the per-shape table, the Path M port, and new scripts without consent (`scripts/windows/CLAUDE.md`).
+
+**Stop and report if:**
+- a bit-identical build changes outputs
+- a build fails to compile (keep the run folder; add a `KNOWN` signature only if it is a new real failure)
+- a TDR occurs (Display event 4101)
+- the baseline does not reproduce E2 within ~5%
 
 ## Steps
 

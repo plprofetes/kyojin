@@ -352,3 +352,10 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - Several of these already exist in `exl3_dec` behind compile flags that default off: `EXL3_DEC_PROD=2` (the same `v_pk_mul_lo_u16` + `v_mad_u32_u16` trick, mul1 only) and `EXL3_DEC_PF=1` (prefetch). No measurement of either is recorded in the repo **[V: grep]**. Both are bit-identical.
 - Headroom estimate from the E2 numbers: linear time 75 ms/token vs ~62 ms at 220 GB/s, so about 13 ms possible (about 15 tok/s plain), much of it in narrow-N shapes **[I]**.
 - The plan now has Path A (section 6 of [plan-08-decode-gemv.md](sprints/s6-scale-and-speed/plan-08-decode-gemv.md)) ahead of the port. Nothing built or run.
+
+## 2026-11-01: HANDOFF for S6-08: local GPU agent measures Phase 1 and Path A's flag builds
+
+- **Start here:** the "Next session: HANDOFF to the local GPU agent" section of [S6-08](sprints/s6-scale-and-speed/08-decode-gemv-upstream-exl3-gemm.md). It gives the read order, the exact build commands (`EXL3_HIP_DEFINES` must keep `EXL3_HIP_STG_PAD`), the gates, the report format and the stop conditions. The plan is [plan-08-decode-gemv.md](sprints/s6-scale-and-speed/plan-08-decode-gemv.md).
+- **Scope:** baseline; bit-identical flag builds `EXL3_DEC_PROD=2`, `EXL3_DEC_PF=1` and both; a `QWG_ABLATE=1` attribution build; occupancy facts; per-shape timing in production launch groups. Then a written decision on the next step. No source changes except a proposed default flip (operator approval, MoE re-check first).
+- **Settled:** no autotuner port; no code regression; a global `EXL3_DEC_MIN_BLOCKS` is not the fix.
+- Nothing was built or run in the cloud session that wrote this.

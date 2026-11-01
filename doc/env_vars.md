@@ -7,6 +7,10 @@ Boolean-ish variables treat `0` as off and any other value as on unless noted. C
 variables are read once (on first use) and cached; Python-side variables are read at import
 time. Either way, set them before loading a model.
 
+Every switch the code reads (720+, most not described here yet) is listed with its default, read site and nearest code
+comment in [knobs.md](knobs.md) (generated: `python tools/knobs.py doc`). CI (`.github/workflows/knobs.yml`) fails when a
+new switch is not mentioned on this page. Measured effects per model: [benchmarks/sweeps/](benchmarks/sweeps/README.md).
+
 ## Persistent prompt cache (GLM, Qwen, DS4.1 servers)
 
 Prompt-cache pages are written to the NVMe in the background, so a restarted server (or a session resumed the next day)

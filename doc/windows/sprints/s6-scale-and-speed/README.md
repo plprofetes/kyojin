@@ -28,4 +28,5 @@ Status is edited in each task file; this table is generated: `python scripts/win
 | 5 | S6-05 | [Windows equivalents for the Linux-only memory code](05-windows-host-memory.md) | todo | S4-05 |
 | 6 | S6-06 | [CI tier 1: always-on Linux checks for the Windows port](06-ci-tier1-checks.md) | todo | S5-03 |
 | 7 | S6-07 | [CI tier 3: written local GPU release gate](07-local-release-gate.md) | todo | S5-01 |
+| 8 | S6-08 | [Single-row decode projection: adopt upstream's autotuned `exl3_gemm` path (or retune `exl3_dec`) on gfx1151](08-decode-gemv-upstream-exl3-gemm.md) | todo | S4-05 |
 <!-- tasks:end -->

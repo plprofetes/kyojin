@@ -45,7 +45,11 @@ if windows:
     # No -std flags here: torch's cpp_extension appends its own (unconditionally on the Windows
     # nvcc path), and a second -std argument is a fatal nvcc error, not an override.
     extra_cflags += ["/Ox", "/Zc:preprocessor", "/DWIN32_LEAN_AND_MEAN", "/DNOMINMAX"]
-    extra_cuda_cflags += ["-DWIN32_LEAN_AND_MEAN", "-DNOMINMAX", "-Xcompiler=/Zc:preprocessor"]
+    if torch and torch_version.hip:
+        # hipcc is clang: nvcc's -Xcompiler= does not exist there (host .cpp files still get the cl flags above)
+        extra_cuda_cflags += ["-DWIN32_LEAN_AND_MEAN", "-DNOMINMAX"]
+    else:
+        extra_cuda_cflags += ["-DWIN32_LEAN_AND_MEAN", "-DNOMINMAX", "-Xcompiler=/Zc:preprocessor"]
     if ext_debug:
         extra_cflags += ["/Zi"]
         extra_cuda_cflags += []
@@ -67,11 +71,24 @@ if torch and torch_version.hip:
         extra_cuda_cflags += ["-D" + d]
     # ROCm 7.14 ships clang 22, which treats the deprecated `register` keyword as
     # a hard error in C++17 mode (older ROCm toolchains only warned).
-    extra_cflags += ["-Wno-register"]
+    extra_cflags += ["-Wno-register"]   # host .cpp is compiled by clang-cl on Windows (set CXX/CC; see scripts/windows)
     extra_cuda_cflags += ["-Wno-register"]
     if dev_include := os.environ.get("EXL3_ROCM_DEV_INCLUDE"):
         extra_cflags += ["-I" + dev_include]
         extra_cuda_cflags += ["-I" + dev_include]
+
+extra_link_args = []
+if windows and torch and torch_version.hip:
+    # The host half of the .cu files (e.g. stloader_cu.cu __float2half_rn) makes clang emit calls to compiler-rt
+    # builtins such as __truncsfhf2. clang-cl adds clang_rt.builtins itself, but setuptools calls link.exe directly,
+    # which only sees the MSVC CRT (LNK2001). Link the ROCm LLVM copy explicitly; no silent fallback.
+    import glob
+    _rocm_home = os.environ.get("EXL3_ROCM_SDK") or cpp_extension.ROCM_HOME or ""
+    _builtins = sorted(glob.glob(os.path.join(
+        _rocm_home, "lib", "llvm", "lib", "clang", "*", "lib", "windows", "clang_rt.builtins-x86_64.lib")))
+    if not _builtins:
+        raise RuntimeError(f"clang_rt.builtins-x86_64.lib not found under {_rocm_home!r} (set EXL3_ROCM_SDK to the ROCm devel root)")
+    extra_link_args += [_builtins[-1]]
 
 def _host_cxx_has_format():
     # Probe whether the host C++ compiler ships a <format> header (GCC 13+).
@@ -99,7 +116,7 @@ def _host_cxx_has_format():
         return False
 
 
-if torch and torch_version.hip and _host_cxx_has_format():
+if torch and torch_version.hip and not windows and _host_cxx_has_format():
     # HIP's host_defines.h empties __host__/__device__/__noinline__ for host
     # compilation, which breaks libstdc++16's <format> ([[__gnu__::__noinline__]]
     # parses as an empty attribute name). Force <format> to parse first, before
@@ -176,8 +193,11 @@ setup_kwargs = (
                 extension_name,
                 sources,
                 extra_compile_args=extra_compile_args,
+                extra_link_args=extra_link_args,
                 include_dirs=[sources_dir],
-                libraries=["cublas"] if windows else [],
+                # Windows resolves every import at link time (Linux leaves them to the loader): hgemm.cu calls
+                # hipBLAS and, under USE_ROCM, rocBLAS directly, so both import libraries are needed on ROCm
+                libraries=(["hipblas", "rocblas"] if torch_version.hip else ["cublas"]) if windows else [],
             )
         ],
         "cmdclass": {"build_ext": cpp_extension.BuildExtension},

@@ -129,7 +129,13 @@ to the untuned path.
 #include <string>
 #include <mutex>
 #include <cstdio>
+#ifdef _WIN32
+#include <direct.h>
+#define DTUNE_MKDIR(p) _mkdir(p)        // UCRT has no 2-argument POSIX mkdir
+#else
 #include <sys/stat.h>
+#define DTUNE_MKDIR(p) mkdir(p, 0755)
+#endif
 
 namespace dtune
 {
@@ -160,8 +166,10 @@ static std::string cache_path()
     if (p && *p) return p;
     const char* h = getenv("HOME");
     std::string d = std::string(h ? h : "/tmp") + "/.cache/exllamav3";
-    mkdir((std::string(h ? h : "/tmp") + "/.cache").c_str(), 0755);
-    mkdir(d.c_str(), 0755);
+    // HOME, else "/tmp", on every OS: the Python writers of this file (model/dense_warmup.py:36, util/tune_cache.py:116)
+    // use the same rule. On Windows set HOME=%USERPROFILE% to keep it out of <drive>:\tmp.
+    DTUNE_MKDIR((std::string(h ? h : "/tmp") + "/.cache").c_str());
+    DTUNE_MKDIR(d.c_str());
     return d + "/dense_gemm_tune.txt";
 }
 

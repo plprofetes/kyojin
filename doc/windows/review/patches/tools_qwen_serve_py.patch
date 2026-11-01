@@ -1,0 +1,22 @@
+diff --git a/tools/qwen/serve.py b/tools/qwen/serve.py
+index b931449..7982b08 100644
+--- a/tools/qwen/serve.py
++++ b/tools/qwen/serve.py
+@@ -425,7 +425,7 @@ def load_defaults(model_dir: str, args: argparse.Namespace | None = None) -> dic
+     d = dict(FALLBACK_DEFAULTS)
+     gc = Path(model_dir) / "generation_config.json"
+     if gc.is_file():
+-        cfg = json.loads(gc.read_text())
++        cfg = json.loads(gc.read_text(encoding="utf-8"))
+         d.update({k: cfg[k] for k in ("temperature", "top_p", "top_k") if k in cfg})
+     d.update({"enable_thinking": None, "reasoning_effort": DEFAULT_EFFORT})
+     if args is not None:
+@@ -665,7 +665,7 @@ def configure_draft2s(model_path: str) -> str:
+     try:
+         with open(f, "rb") as fh:
+             meta = json.loads(fh.read(struct.unpack("<Q", fh.read(8))[0])).get("__metadata__") or {}
+-        cfg = json.loads((Path(model_path).expanduser() / "config.json").read_text())
++        cfg = json.loads((Path(model_path).expanduser() / "config.json").read_text(encoding="utf-8"))
+         cfg = cfg.get("text_config", cfg)
+         ok = meta.get("format") == "draft2s-v1" and int(meta["vocab"]) == cfg["vocab_size"] \
+             and int(meta["in_features"]) == cfg["hidden_size"]

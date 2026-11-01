@@ -30,6 +30,16 @@ if is_precompiled_extension_available():
     import exllamav3_ext
 else:
 
+    if windows and torch.version.hip:
+        # The JIT path below carries nvcc-style Windows flags (-Xcompiler=, cublas.lib) and cl.exe as host
+        # compiler; none of it works with hipcc on Windows. Fail before a long build that cannot succeed.
+        raise ImportError(
+            "exllamav3_ext is not built. On Windows with ROCm torch the JIT build is not supported: build it "
+            "once from a VS x64 developer shell with DISTUTILS_USE_SDK=1 and ROCM_HOME set to "
+            "`rocm-sdk path --root`, then run `python setup.py build_ext --inplace` in the repository root "
+            "(see setup.py)."
+        )
+
     # Kludge to get compilation working on Windows
 
     if windows:

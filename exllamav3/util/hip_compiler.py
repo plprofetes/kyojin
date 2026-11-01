@@ -12,6 +12,12 @@ import hashlib, os, shutil, subprocess, sys, sysconfig
 FIX_LINE = "export EXL3_ROCM_SDK=$(rocm-sdk path --root)"
 SLOW_COST = "prefill can be about 20 % slower"
 _info = {}
+_EXE = ".exe" if os.name == "nt" else ""   # the Windows SDK ships bin\\hipcc.exe and Scripts\\rocm-sdk.exe, no extensionless files
+
+
+def _hipcc_in(root):
+    """<root>/bin/hipcc (hipcc.exe on Windows)."""
+    return os.path.join(root, "bin", "hipcc" + _EXE)
 
 
 def _sdk_from_package():
@@ -21,12 +27,12 @@ def _sdk_from_package():
         roots |= {p for p in sys.path if p.endswith("site-packages")}
         for r in sorted(x for x in roots if x):
             d = os.path.join(r, "_rocm_sdk_devel")
-            if os.path.isfile(os.path.join(d, "bin", "hipcc")):
+            if os.path.isfile(_hipcc_in(d)):
                 return d
-        tool = os.path.join(os.path.dirname(sys.executable), "rocm-sdk")
+        tool = os.path.join(os.path.dirname(sys.executable), "rocm-sdk" + _EXE)
         if os.path.isfile(tool):
             out = subprocess.run([tool, "path", "--root"], capture_output=True, text=True, timeout=20).stdout.strip()
-            if out and os.path.isfile(os.path.join(out, "bin", "hipcc")):
+            if out and os.path.isfile(_hipcc_in(out)):
                 return out
     except Exception:  # noqa: BLE001
         pass
@@ -55,8 +61,8 @@ def resolve():
     env_sdk = os.environ.get("EXL3_ROCM_SDK")
     found_sdk = _sdk_from_package()
     cands = [("EXL3_HIPCC", os.environ.get("EXL3_HIPCC")),
-             ("EXL3_ROCM_SDK", os.path.join(env_sdk, "bin", "hipcc") if env_sdk else None),
-             ("rocm-sdk package", os.path.join(found_sdk, "bin", "hipcc") if found_sdk else None),
+             ("EXL3_ROCM_SDK", _hipcc_in(env_sdk) if env_sdk else None),
+             ("rocm-sdk package", _hipcc_in(found_sdk) if found_sdk else None),
              ("PATH", shutil.which("hipcc")), ("/opt/rocm", "/opt/rocm/bin/hipcc")]
     path, source = None, None
     for src, p in cands:

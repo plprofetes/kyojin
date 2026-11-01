@@ -59,6 +59,8 @@ Hypothesis to test first [I]: this fork's gemv is latency-bound per wave. Each l
 
 ## 1. Decision structure (happy path)
 
+**Updated 2026-11-01:** do **Path A** (section 6: adapt upstream's techniques inside `exl3_dec`; several already exist behind compile flags) before Path M. The tree below still holds, with Path A's bit-identical flag builds folded into Phase 1 and its source changes into Phase 2.
+
 ```
 Phase 1 (attribute, 0.5-1 day) -> where do the 15 us go?
    |-- DRAM stream / occupancy dominated --> Phase 2 (Path T: kbs + PF + per-shape table, 1-2 days)
@@ -219,7 +221,56 @@ Not needed: the cooperative GEMM, comp units, kernel map, `rdna_wmma`, or a devi
 
 Routed-expert decode (`exl3_dec_moe*`, `EXL3_DEC_MOE_{KBS,KTW,MIN_BLOCKS}_{A,B}`) uses the same `pick_ktw`/`kbs_of`/`k_split` machinery. The Phase 1 ablation and the Phase 2 sweep method carry over unchanged, so run them on the Qwen3-30B-A3B pack (`C:\exl3-probe\models\Qwen3-30B-A3B-exl3-4.0bpw`) once the dense table works. Upstream's MoE counterpart is `exl3_rocm_moe_decode` (`rocm/quant/exl3_gemv_multirow_rdna.cuh`): same structure (gate|up as one 2S-slot GEMV, the activation folded into down's input rotation). Compare it with the same table as 0.2 before any MoE kernel port.
 
-## 6. Stop conditions
+## 6. Path A: adapt upstream's improvements inside `exl3_dec` (preferred over Path M)
+
+Operator question (2026-11-01): can upstream's fixes be adapted to the local kernels instead of porting? **Yes, for most of them.** Upstream's own notes (`rocm/quant/exl3_gemv_tiles_rdna.cuh:1-60`) say its decode GEMVs were **VALU-bound, not DRAM-bound**. The rewrite that made them fast consists of instruction-level techniques, and those carry over to `exl3_dec` without changing its lane-per-tile layout.
+
+### 6.1 Headroom budget (27B, from E2 numbers, all [I])
+
+| group | ms/token now | bytes/token | ms at 220 GB/s | possible gain |
+|---|---|---|---|---|
+| gate/up (128 calls) | 30.85 | 5.71 GB | 25.9 | ~4.9 |
+| down (64 calls) | 15.15 | 2.85 GB | 13.0 | ~2.2 |
+| lm_head | 4.23 | 0.95 GB | 4.3 | 0 (already ~225 GB/s) |
+| all other dense linears | ~24.8 | ~4.1 GB (13.6 total minus the above) | ~18.6 | ~6 |
+| **total linear time** | **75.0** | ~13.6 GB | ~61.8 | **~13** |
+
+- Decode is ~79 ms/token now. Taking ~13 ms off would give about 66 ms, i.e. ~15 tok/s, which is above upstream's 14.0.
+- The "other" group is where most of the relative loss sits. Small-N shapes run with few blocks: for example a lone 5120 -> 1024 has 2 strips x 5 blocks = 10 blocks = 80 waves, about one wave per SIMD on 80 SIMDs, at ~53 GB/s. In production several of these are fused into `exl3_dec_gemv_multi` launches (q/k/v, GDN), so **measure them in their real launch grouping**, not one at a time.
+- Recompute this table from the real bytes per call before you rely on it.
+
+### 6.2 Upstream techniques -> where they stand in `exl3_dec`
+
+| # | upstream technique (`exl3_gemv_tiles_rdna.cuh`, `exl3_gemv_multirow_rdna.cu`) | `exl3_dec` today | adaptation | numerics |
+|---|---|---|---|---|
+| A1 | hash multiply as `v_pk_mul_lo_u16` + `v_mad_u32_u16` (2 full-rate ops instead of 1 quarter-rate `v_mul_lo_u32`) | **already implemented** as `EXL3_DEC_PROD=2` (`exl3_dec.cu:~115-180`, `mul1_pair` asm block), but **default 0** (quarter-rate `v_mul_lo_u32`). No recorded measurement in the repo **[V: grep]** | rebuild with `-DEXL3_DEC_PROD=2`, measure, flip the default if it wins. **Applies to mul1 (CB 2/3) only:** `mcg_fold` still does a full 32-bit `w * c.mul`. Check which codebook the 27B and MoE packs use (`mcg`/`mul1` tensors in the pack) **[?]**. For mcg the same split works when the window is known to be 16 bits wide, but upstream's mcg decode must be read first | **bit-identical** (exact integer arithmetic) |
+| A2 | byte sum by `v_sad_u8` / `v_sad_hi_u8`, giving a packed fp16 pair with no repacking | already used (`PORT_SAD_U8`, `PORT_SAD_HI_U8`) | none | n/a |
+| A3 | funnel shift by one `v_alignbit_b32` | already used (`window<>`, compile-time windows) | none | n/a |
+| A4 | wave-uniform SGPR addressing, zero VALU address math per tile | per-lane 64-bit pointer advanced by `tstride` per tile: about 2 VALU ops per 128 pairs | low priority; check the ISA for per-tile 64-bit adds | bit-identical |
+| A5 | input rotated **once** (separate kernel, `A_had` in L2), no LDS prologue; measured upstream as part of 213.8 -> 201.6 us | every block rotates its chunks into LDS, then `__syncthreads`; repeated across all strips | (a) when `ktw % 8 == 0`, wave w only reads the chunks it could rotate itself: assign chunk c to wave `c / (ktw/8)` and drop the prologue barrier for exact codebooks (`xsum` is unused when `dec_exact<CB>()`). (b) For multi launches (q/k/v, gate+up), rotate x once per launch into L2 and have blocks read their slice directly. Mind the strided `x_gstride` and per-job `x_off` cases | **bit-identical** if the same `prologue_chunk` arithmetic produces the same fp16 values |
+| A6 | load latency hidden by many short waves | ring 1 with `EXL3_DEC_PF=0`: tile i+1 is loaded after tile i is decoded (one tile in flight per lane) | `-DEXL3_DEC_PF=1` (exists; costs ~32 VGPRs). Also sweep `EXL3_DEC_SB` (sched-barrier spacing, default 4) with PF on | bit-identical (documented) |
+| A7 | no cross-block split-K for wide N (in-block only) | `kbs` blocks write fp32 partials; the last block sums `kbs x 512` floats with coherent loads (serial tail per strip) | per-shape `kbs` table (Phase 2): small kbs for wide N, large kbs for narrow N | changes order; plain and verify move together |
+| A8 | narrow-N shapes get more in-block k-parallelism (`splitk_warps` = 16 when blocks < 128) | WPB fixed at 8; small-N parallelism only through `kbs` (max G = 40) | ragged `kbs` up to G for small N (in the table). If still short, a WPB = 16 instantiation for small-N shapes | changes order (as A7) |
+| A9 | small decode body per lane (8 weights per tile), so no I-cache pressure | fully unrolled 256-weight tile, ~10 KB of code; the source says gfx1151 is **instruction-cache bound** here and ring 2 thrashes it | only by a different lane mapping (2 lanes per tile, 128 weights each), which is half of Path M. Do it last, and only if A1+A6 leave the kernel VALU- or I-cache-bound | changes order |
+| A10 | fused output epilogue per 128-column segment | block reduce in LDS (3-4 barriers) + split-K handshake | follows A7: with kbs = 1 for a shape the handshake disappears | n/a |
+
+### 6.3 Order of work (cheapest and bit-identical first)
+
+1. Phase 1 attribution as written, **plus** builds for A1 (`EXL3_DEC_PROD=2`) and A6 (`EXL3_DEC_PF=1`, then `EXL3_DEC_SB` in {2, 4, 8}).
+   - Each is a one-flag rebuild and bit-identical: gate it with `torch.equal` against the default build on all 27B shapes and on R-row verify.
+   - Expected: if upstream's diagnosis holds for this kernel (VALU-bound), A1 alone moves gate/up noticeably. If the `QWG_ABLATE` "no DRAM stream" arm shows almost no change, the kernel is decode-bound and A1/A6/A9 are the levers. If the "no decode" arm shows almost no change, it is memory-bound and A5/A7/A8 are the levers.
+2. A5 (a): drop the prologue barrier where wave-local. Bit-identical; a small source change in `gemv_kernel`, `prologue_x` and the R-row twin.
+3. Phase 2 table (A7/A8) and fused plain gate+up (3.4).
+4. A5 (b) for multi launches; A4 if the ISA shows real address cost.
+5. A9 or Path M, only if items 1-4 leave gate/up above 205 us or the "other" group far from 200 GB/s.
+
+**DoD Path A:**
+- Every bit-identical step: `torch.equal` with the previous build on all shapes, 1-row and R-row.
+- Each non-bit-identical step: plain == speculative gate (3.1) plus the quality spot check.
+- Overall: the S6-08 numbers. A stretch target from 6.1 is a linear-time sum <= 66 ms/token, i.e. ~15 tok/s plain.
+- MoE: the same flags apply to `exl3_dec_moe*` (same `tile_dot`), so re-measure Qwen3-30B-A3B after each default flip.
+
+## 7. Stop conditions
 
 - The Phase 1 ablation shows neither arm explains more than half the gap -> stop and report. The gap is then elsewhere (launch overhead, inter-block glue: E1 has 2.2 ms of glue and 2.4 ms outside `model.forward`).
 - The 3.1 bit gate fails after the change -> revert and report the shape.

@@ -345,3 +345,10 @@ Append-only, newest entry last. One entry per working session: what was done, wh
   - Phase 2 (Path T): per-matrix split key, ragged `EXL3_DEC_KBS` sweep, static per-shape table, fused plain gate+up.
   - Phase 3 (Path M, only if needed): vendor upstream's multirow GEMV (16 files / 5,498 lines of closure, no cooperative launch), routed for rows 1-8 together.
 - Nothing was built or run; no code changed.
+
+## 2026-11-01: S6-08 adapt instead of port (static, no GPU)
+
+- Upstream's own notes say its RDNA decode GEMVs were VALU-bound, and the techniques that fixed that carry over to `exl3_dec`: full-rate hash multiply, SAD byte sums, alignbit windows, one input rotation per call, more k-parallelism for narrow N.
+- Several of these already exist in `exl3_dec` behind compile flags that default off: `EXL3_DEC_PROD=2` (the same `v_pk_mul_lo_u16` + `v_mad_u32_u16` trick, mul1 only) and `EXL3_DEC_PF=1` (prefetch). No measurement of either is recorded in the repo **[V: grep]**. Both are bit-identical.
+- Headroom estimate from the E2 numbers: linear time 75 ms/token vs ~62 ms at 220 GB/s, so about 13 ms possible (about 15 tok/s plain), much of it in narrow-N shapes **[I]**.
+- The plan now has Path A (section 6 of [plan-08-decode-gemv.md](sprints/s6-scale-and-speed/plan-08-decode-gemv.md)) ahead of the port. Nothing built or run.

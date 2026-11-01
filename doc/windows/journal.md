@@ -359,3 +359,15 @@ Append-only, newest entry last. One entry per working session: what was done, wh
 - **Scope:** baseline; bit-identical flag builds `EXL3_DEC_PROD=2`, `EXL3_DEC_PF=1` and both; a `QWG_ABLATE=1` attribution build; occupancy facts; per-shape timing in production launch groups. Then a written decision on the next step. No source changes except a proposed default flip (operator approval, MoE re-check first).
 - **Settled:** no autotuner port; no code regression; a global `EXL3_DEC_MIN_BLOCKS` is not the fix.
 - Nothing was built or run in the cloud session that wrote this.
+
+## 2026-11-01: switch inventory, documentation gate and unattended sweep (cloud session, no GPU)
+
+- **Operator request:** a systematic sweep of build flags and env switches on standard queries (4K and 16K prompts), results in general docs and per-model benchmarks, and a CI check that new switches are documented. Python, kept simple.
+- **`tools/knobs.py` (stdlib):** inventory of every switch the code reads, by regex. It finds 720 names: env vars in Python and C++, and 29 build flags.
+  - `doc` writes [doc/knobs.md](../knobs.md) (default, read site, `SERVE_ENV` value, nearest comment).
+  - `check` is the CI gate in `.github/workflows/knobs.yml`: every switch must be mentioned in `doc/env_vars.md`. The 510 that predate the gate are listed in `doc/knobs_undocumented.txt`.
+  - Where the switches are described today: `doc/env_vars.md` mentions 210, and about two-thirds have a comment near their read site. This repo's history starts at a squashed snapshot (`1d0ad27`), so introduction commits are not available **[V]**.
+- **`tools/sweep.py` (stdlib, ~330 lines):** one fresh server per measurement; warm-up, then ~4K and ~16K prompts, greedy, 256 tokens; speed taken from the server's `qserve: request` line; reply text kept for an identity check. The baseline runs 3 times per round, arms are shuffled, it resumes, and it stops after 3 failures in a row.
+  - Default arms: 24 `SERVE_ENV` reverts, 8 `EXL3_DEC_*` runtime arms, and 5 build-flag arms. Build arms go through `kyojin_win.py build --clean`, and the default build is restored at the end.
+  - Smoke-tested here against a fake server (run, report, resume, retry of failed runs, stop after 3 failures) **[V]**. Not run on the target **[?]**. The build arms (Windows only) are untested.
+- **Docs:** [doc/benchmarks/sweeps/README.md](../benchmarks/sweeps/README.md) has the method, the overnight command and how to read a report; `env_vars.md` links the inventory and the gate. The S6-08 handoff now points to the sweep as its first step.

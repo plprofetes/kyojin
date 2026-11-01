@@ -80,9 +80,53 @@ Upstream runs `exl3_gemm` for 1-144 rows and `reconstruct_hgemm` above 144 (`AUT
 
 ## Proposal
 
-- **Option A (preferred if it links):** build `quant/exl3_gemm.cu`, `quant/coop_autotune.cu`, `quant/exl3_kernel_map.cu` and the `comp_units` for K = 4 (K = 6 optional) for gfx1151, together with whatever of upstream's `rocm/` layer the RDNA inner kernel needs; route **`rows == 1`** projections through the `exl3_gemm_gr`-equivalent behind a switch (default off until A/B), keep `dec_gemv_r` and every other row count as is.
-- **Option B:** retune `exl3_dec` for 5120 -> 17408, K = 4 (tile and split-k sweep, lane count, the `EXL3_DEC_PF` prefetch depth) until the microbenchmark matches 201.6 us, without new sources.
+- **Option A (second step, larger; see Effort):** build `quant/exl3_gemm.cu`, `quant/coop_autotune.cu`, `quant/exl3_kernel_map.cu` and the `comp_units` for K = 4 (K = 6 optional) for gfx1151, together with whatever of upstream's `rocm/` layer the RDNA inner kernel needs; route **`rows == 1`** projections through the `exl3_gemm_gr`-equivalent behind a switch (default off until A/B), keep `dec_gemv_r` and every other row count as is.
+- **Option B (first step, cheapest; evidence below):** retune `exl3_dec` per shape (a table or a start-up autotune) for 5120 -> 17408, K = 4 (tile and split-k sweep, lane count, the `EXL3_DEC_PF` prefetch depth) until the microbenchmark matches 201.6 us, without new sources.
 - **Option C (measurement only):** compile one source file (for example `exl3_gemv.cu`) with both toolchains to separate compiler version from source.
+
+## Option B evidence (2026-11-01) [V]
+
+`exl3_dec.cu` picks the dense k-tile width in `pick_ktw` as the largest that still leaves `min_blocks` (default 32) blocks (`WPB` = 8 waves per block, `KTW_MAX` = 32); the comment above `kbs_of` says it was measured at **MiMo shapes** (`tools/decode/sweep.py`). The knobs `EXL3_DEC_MIN_BLOCKS`, `EXL3_DEC_KTW`, `EXL3_DEC_KBS` are read with `getenv` on every call, so they can be swept without a rebuild. Gate/up (5120 -> 17408, K = 4) on the real weights, interleaved fresh processes, n = 4, production path, microseconds per call:
+
+| setting | median | range |
+|---|---|---|
+| this fork, default | 218.0 | 216.7-221.2 |
+| this fork, `EXL3_DEC_MIN_BLOCKS=192` | 209.3 | 208.8-209.9 |
+| upstream (autotuned `exl3_gemm`) | 201.9 | 201.4-203.2 |
+
+One variable closes 54% of the gap. It is **global**, though: per-shape sweep with 192 (us/call, default -> 192): 5120x17408 239.8 -> 234.4 (-2.2%), 5120x10240 144.7 -> 157.0 (+8.5%), 5120x12288 167.5 -> 177.8 (+6.1%), 6144x5120 98.5 -> 102.7 (+4.3%), 5120x6144 99.2 -> 102.4 (+3.2%), 5120x1024 49.1 -> 55.8 (+13.5%); weighted sum 74.99 -> 75.32 ms/token, end-to-end decode within noise. So the fix is a **per-shape** choice, which is also what upstream's autotuner does. Keep the R-row kernels consistent: they call the same `pick_ktw`/`kbs_of` so batch-1 and verify keep the same accumulation order (plain == speculative). Noise: the same configuration varied 216.7-227.0 us across fresh processes; always interleave, n >= 4.
+
+## Effort (static analysis, 2026-11-01) [I]
+
+- Upstream's hand-written `rocm/` layer is 27 files / 9,252 lines. The single-row `exl3_gemm` path needs **6 of them (1,889 lines)**: `rocm/rdna_wmma.cuh` 740, `rocm/quant/exl3_gemm_inner_rdna.cuh` 660, `rocm/rdna_wmma_emu.cuh` 128, `rocm/quant/exl3_mgemv_rdna.cuh` 138, `rocm/quant/exl3_gemv_multirow_rdna.cuh` 111, `rocm/ptx_rocm.cuh` 112, plus shared `arch.cuh` (38) and `ptx_portable.cuh` (66); none exist in this tree. (Include closure counted regardless of `#if`, so an upper bound.)
+- The shared closure is 35 files / 6,354 lines; 20 differ from this fork's copies (~1,850 changed lines). This fork's `quant/exl3_gemm.cu`, `quant/exl3_gemm_kernel.cuh`, `quant/exl3_kernel_map.cu` and `ptx.cuh` contain **no ROCm guards** (upstream: 7, 5, 1, 28), i.e. they are pre-ROCm CUDA versions: a port replaces them.
+- `ptx.cuh` is included by 41 of this fork's sources and `util.cuh` by 92, so do not replace shared headers in place; vendor the closure as an isolated subtree (about 8.3k lines copied verbatim, 25-30 files) with a distinct entry point, and route only `rows == 1`.
+- Translation units: `exl3_gemm.cu`, `coop_autotune.cu`, `exl3_kernel_map.cu` and the three K = 4 comp units; the kernel map references every K, so trim it to K = 4 or compile all 24 + 3 comp units.
+- **Option A: about 3-5 working days** (vendoring and glue 1; compile/link debugging 1-2 at about 12 min per full build; validation 1 including plain == speculative, the TTFT table and a TDR soak). **Option B: about 1-2 days** (per-shape sweep over the nine shape classes, a small table or start-up autotune in `pick_ktw`, one rebuild, same validation). Do B first; do A only if B leaves a gap worth the extra days.
+
+## Next session: evaluate porting the autotuner (operator instruction, 2026-11-01)
+
+The operator asked that the next session in this repo **evaluate porting upstream's autotuner at least** (written "autoevaluator"; read as upstream's `CoopKernelAutotuner`, the per-shape launch-config selection in `quant/coop_autotune.cu` and `quant/exl3_gemm.cu`). The evaluation is the deliverable: a written go/no-go in the journal and in this task's Evidence. Implement only on a go, and ask before adding any new script, tool or subcommand (`scripts/windows/CLAUDE.md`).
+
+**Context to keep in mind: this fork's priority is MoE models** (operator, 2026-11-01), so the dense decode GEMV path is a niche here, but not an irrelevant one. `README.strix-halo.md` lines 87-95 give the byte budget of a Flash-Next-class forward as routed experts 47%, **dense EXL3 GEMVs 40%**, mixers 13%, with dense GEMVs at 55-65% of the 236 GB/s peak and grouped expert GEMVs at 131-135 GB/s **[V, quote]**. The dense tiling heuristic (`pick_ktw`) was tuned at MiMo shapes, so the shapes of other models (Qwen3.8-27B, others) are untuned. The "about 135 GB/s" is the small-kernel rate measured by `tools/strix_halo/read_bw_vs_size.py`, not a platform ceiling: that tool reproduces 104-148 GB/s at 4-64 MiB on this Windows machine, and the 236 GB/s ceiling is for big copies **[V]**. For small kernels the lever is bytes per launch (each launch pays a fixed ramp-up cost).
+
+**What to find out** (each answer goes in the journal):
+1. What upstream's autotuner does: candidate set (GEMM shape index x `num_sms` x concurrency), key (`gemm_autotune_hash`, RDNA variant XORed at `exl3_gemm.cu:315`), measurement (CUDA event pair around `repeats` launches, `coop_autotune.cu` about lines 415-440, explicitly "timing candidates with warm cache" about line 372), launch (cooperative launch with a device barrier; `EXL3_DEBUG_AUTOTUNE` exists in upstream only, this fork's copy is the older version with 34 changed lines), and where the results persist **[V from reading; persistence not confirmed]**.
+2. Whether it applies to `exl3_dec`: that kernel's tiling knobs are `ktw`, `kbs` and `min_blocks` (`pick_ktw`, `kbs_of`) and it is not a cooperative GEMM kernel, so most likely the **pattern** (key, candidates, timing, cache) is reusable and the code is not **[I]**.
+3. Whether its timing method is valid on this stack: event pairs around 100-300 us kernels must be validated (on this machine `Event.elapsed_time` is right for one long GPU queue but under-counts chains of small kernels), and warm-cache bias (tuning one matrix is MALL-warm, 32 MB; production cycles over layers, which is why the operator's replay round-robins over 24 layers).
+4. Where per-shape results would be stored: this fork already has `exllamav3/util/tune_cache.py` (`signature`, `read_records`, `write_records`, `merge_into`), `exllamav3/model/dense_warmup.py` and `exllamav3/model/dense_gemm_tune_seed.txt`.
+5. Which shapes and candidates: for Qwen3.8-27B nine classes (E2 and "Option B evidence" above); for the MoE priority models read the dense projection shapes from their configs, plus the expert knobs (`EXL3_DEC_MOE_KBS_A/B`, `_KTW_A/B`, `_MIN_BLOCKS_A/B`).
+6. Bit-identity: the R-row kernels use the same `pick_ktw`/`kbs_of`, so the tuner has to feed both; plain == speculative must still hold.
+7. Cost: tuning time per shape, the start-up budget (dense GEMM warm-up is already about 90 s), persistence across restarts.
+8. A go/no-go with an effort estimate, compared with Option A (about 3-5 days) and Option B (about 1-2 days).
+
+**First cheap steps (no code):**
+- Run the Qwen3-30B-A3B EXL3 pack that is already on the operator's disk (`C:\exl3-probe\models\Qwen3-30B-A3B-exl3-4.0bpw`, 15.98 GB) through this fork's tree as the MoE sanity check. Stage 1 measured upstream EXL3 at 72.9 tok/s decode vs llama.cpp 86.0 on it. MoE kernels are listed as untested on Windows in [deferred.md](../../deferred.md), so expect build or JIT risk.
+- Prototype per-shape `EXL3_DEC_MIN_BLOCKS` from Python before each `dec_gemv` call (`env_int` calls `getenv` each time) to measure the end-to-end gain before touching C++ **[I: assumes `os.environ` writes reach the extension's CRT]**.
+
+**Measurement rules learned the hard way:** interleave configurations in fresh processes, n >= 4, and report medians and ranges (the same configuration varied 216.7-227.0 us across processes); discard the first pass (first-use tuning); validate a timing method on a known workload first (`torch.profiler` has no GPU timeline here and `Event.elapsed_time` under-counts small-kernel chains); use wall-clock replay with one final `synchronize`; compute roofline fractions from the bytes actually read per token (about 13.6 GB for the 27B, not the 16.9 GB pack); fp16 KV unless stated; state the power state.
+
+**Where the evidence and tools are** (operator's `wsl setup` repo, local, commits `69df0db`, `33c6bf3`, `4ea8063`, `5dde33f`, `d5ef67c`): `kyojin_performance_ideas.md` (ideas 18-30 and "Next session"), `kyojin_instrumentation_profiling.md` (steps 13-22), `benchmarks.md` section 17, and `docs/engine-comparison-20261031/profiling/` (`kgemv.py`, `krepeat.py`, `ksweep.py`, `kverify.py`, `klinear.py`, `kreplay2.py`, `kfloor.py`, `kcachecheck.py`, `closure.py`, results).
 
 ## Steps
 

@@ -110,7 +110,8 @@ void exl3_dec_gemv_r_multi
     at::Tensor& scratch,
     at::Tensor& counters,
     const std::vector<double>& K,
-    bool mcg = false
+    bool mcg = false,
+    int64_t strips_hint = 0     // > 0: ktw/kbs as for a launch of that many 512-column strips (the strips of ONE single call, e.g. gate alone for fused gate+up)
 );
 
 // Routed MoE for 1 token: out[H] (fp32) = sum_s w[s] * down_e(silu(gate_e(x)) * up_e(x)), e = sel[s].

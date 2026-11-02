@@ -257,3 +257,13 @@ Link errors from missing `rocm/` pieces: list them; importing upstream's whole R
 **Links.** [S4-05 stability](../s4-serve-qwen/05-stability.md) · [S6-04 Flash-Next](04-flash-next-85gib.md) · [assessment.md](../../assessment.md) · [deferred.md](../../deferred.md) · [journal.md](../../journal.md)
 
 Depends on: [S4-05](../s4-serve-qwen/05-stability.md)
+
+## Evidence log, 2026-11-02 (local GPU session, overnight)
+
+See [journal](../../journal.md) 2026-11-01/02 for the dated detail. Summary of what was measured:
+- **`EXL3_DEC_PROD=2`:** bitwise equal to the default on real 27B weights (66 of 66 outputs). Kernel level about -2 % time at the default kbs; end to end in the shipped configuration (kbs table + fused gate/up) **-1.0 % / -1.4 % decode** (A-B-A with builds). Recommendation: do not flip the default. `EXL3_DEC_PF=1`, `EXL3_DEC_SB`: no effect or worse. The MoE half of the gate is open (see [S6-09](09-qwen3-30b-a3b-moe-decode.md)).
+- **kbs table** (`EXL3_DEC_KBS_TAB=1`, gate/up 25, down 8): decode +3.4 / +2.1 / +3.2 / +3.1 % at 2K / 8K / 16K / 32K, prefill unchanged; plain == R-row bitwise (R = 1..32, real weights).
+- **Fused gate+up** (`EXL3_DEC_GU=1`): +3.0 % at 2K, +1.8 % at 16K on top of the table; bitwise equal to two launches.
+- **Cumulative:** 11.62 -> 12.34 tok/s at 2K (+6.2 %), 11.21 -> 11.75 at 16K (+4.8 %); upstream in the 2026-10-31 comparison 13.7 / 12.9.
+- **Known issue found on the way:** plain != speculative on a 4K prompt at fixed draft depth 1 and 3 in the default build (near-tie token), see the journal entry of 2026-11-02 03:20.
+- No effect on the 27B: `EXL3_CUDA_GRAPH=1`, `EXL3_LAG1=1`.

@@ -30,4 +30,5 @@ Status is edited in each task file; this table is generated: `python scripts/win
 | 7 | S6-07 | [CI tier 3: written local GPU release gate](07-local-release-gate.md) | todo | S5-01 |
 | 8 | S6-08 | [Single-row decode projection: adopt upstream's autotuned `exl3_gemm` path (or retune `exl3_dec`) on gfx1151](08-decode-gemv-upstream-exl3-gemm.md) | todo | S4-05 |
 | 9 | S6-09 | [Qwen3-30B-A3B decode: 9.8 tok/s here against about 73 (upstream) and 86 (llama.cpp) on the same machine](09-qwen3-30b-a3b-moe-decode.md) | todo | S4-05 |
+| 10 | S6-10 | [Plain decode and speculative decode are not bitwise equal on every prompt: find the first differing module](10-plain-vs-speculative-exactness.md) | todo | S4-05 |
 <!-- tasks:end -->

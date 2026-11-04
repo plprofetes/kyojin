@@ -5,7 +5,7 @@
 pip install pytest
 for t in tests/test_ablit_runtime_cpu.py tests/test_uncensor_bundled_cpu.py tools/glm/test_serve.py tools/mimo/test_serve.py tools/mimo/test_toolcalls.py tools/qwen/test_serve.py tools/qwen/test_guard.py tools/test_startup_health.py tests/test_moe_fused_k6_cpu.py; do PYTHONPATH=. pytest -q $t; done
 ```
-Run each file separately because three files share a name (`test_serve.py`). These tests need no GPU and no built extension. GPU tests need a built extension and a free GPU.
+Run each file separately because three files share a name (`test_serve.py`). These tests need no GPU and no built extension. The Windows driver has its own stdlib tests that run on any OS: `python -m unittest scripts/windows/test_kyojin_win.py`. GPU tests need a built extension and a free GPU.
 
 ## Build on CUDA
 The CUDA build is the upstream one and is unchanged. Install a CUDA 12.4 or newer build of PyTorch, then `pip install -r requirements.txt && pip install .`. [upstream.md](upstream.md) has the full upstream guide (wheels, PyPI, uv, Windows, architecture list, conversion tool, examples). [strix-halo.md](strix-halo.md) has the kernel notes and benchmark harnesses.

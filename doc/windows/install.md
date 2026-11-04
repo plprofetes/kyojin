@@ -72,6 +72,7 @@ Add `"stream":true` and `curl.exe -N` for streaming. `"speculative":false` turns
 
 - GPU memory: torch reports 107.87 GiB; on an idle GPU, allocations in 256 MiB, 1 GiB and 4 GiB chunks ran out at about 100 to 101.75 GiB, and a single 88 GiB block worked while 96 GiB failed **[V]**. Plan for about 100 GiB in total, less if another program holds GPU memory. A pack of about 85 GiB plus cache is therefore not ruled out; the 95 GB and 100 GB packs are.
 - Windows sees only part of the RAM on the test machine (31.6 GB of 128 GB) **[V]**.
+- Decode speed depends on what else you do with the machine. On the test machine, Qwen3.5-35B-A3B (MoE, `mcg` codebook) decoded at about 55 tok/s when left alone and between 30 and 47 tok/s while the desktop or a browser was in use; prefill was unaffected. Measure hands-off, and quote the undisturbed figure. The mechanism (the desktop sharing the GPU and memory with compute) is a guess **[?]**.
 
 ## Environment and caches
 

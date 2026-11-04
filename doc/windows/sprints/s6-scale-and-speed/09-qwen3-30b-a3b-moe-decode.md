@@ -23,7 +23,7 @@ The operator's decision (2026-11-01): the 30B model is treated on its own, not a
 | This fork (`577eac3` plus the 2026-11-01 working tree, `PROD=2` build installed) | **9.83 (4K), 9.26 (16K)**, 256 new tokens | 1330 (4K), 995 (16K) | `tools/sweep.py` harness, journal 2026-11-01 **[V, one run, server env as shipped]** |
 
 - Active parameters about 3.3 B at 4 bpw, so about 1.65 GB read per token: about 8 ms at 200 GB/s, a ceiling near 120 tok/s **[I]**. Upstream (about 14 ms/token) is near it, this fork (about 100 ms/token, about 2 ms per layer) is 12 times above it. A gap that size points to the wrong path or host overhead, not to arithmetic.
-- `block_sparse_mlp.py:907-925` (`support_dec_moe`) requires `hidden_size % 512 == 0` and `intermediate_size_padded % 512 == 0` for the fused batch-1 decode (`exl3_dec_moe`, two launches for the whole routed sum). The model has 2048 and 768, so 768 fails **[I, from code; the path actually taken was not profiled]**. Whether the Qwen3.8-Flash-Next-class packs (the MoE target of S6-04) have the same property is **[?]**: a comment in `block_sparse_mlp.py` mentions widths of 640-768 for them.
+- `block_sparse_mlp.py:907-925` (`support_dec_moe`) requires `hidden_size % 512 == 0` and `intermediate_size_padded % 512 == 0` for the fused batch-1 decode (`exl3_dec_moe`, two launches for the whole routed sum). The model has 2048 and 768, so 768 fails **[I, from code; the path actually taken was not profiled]**. **Superseded 2026-11-04: the width is not the likely cause, the pack's codebook is; see the Evidence log.** Whether the Qwen3.8-Flash-Next-class packs (the MoE target of S6-04) have the same property is **[?]**: a comment in `block_sparse_mlp.py` mentions widths of 640-768 for them.
 - This fork's snapshot (2026-10-02) predates upstream's ROCm kernels (2026-10-03 onward); upstream's MoE decode is `exl3_rocm_moe_decode` in `rocm/quant/exl3_gemv_multirow_rdna.cuh` **[I, see S6-08 evaluation]**.
 - The server environment (`SERVE_ENV` in `tools/qwen/serve.py`) was tuned for the dense Qwen3.8 27B. For this model it sets `EXL3_MOE_FUSED=1`, `EXL3_MOE_CFG=2`, `EXL3_MOE_R8=1`, `EXL3_MOE_VALU=1`, `EXL3_MOE_WMMA_MIN_ROWS=9` and others that were never checked on this model **[V, effective env printed in the server log]**.
 - The pack in `C:\exl3-probe\models\Qwen3-30B-A3B-exl3-4.0bpw` had no `chat_template.jinja`, which `serve.py` requires. One was extracted unchanged from its `tokenizer_config.json` on 2026-11-01 (delete it to undo).
@@ -36,6 +36,16 @@ The operator's decision (2026-11-01): the 30B model is treated on its own, not a
 - Upstream for comparison: `C:\exl3-probe\src\exllamav3` (the operator's probe install).
 
 ## Steps
+
+**Added 2026-11-04 (do these before step 0, they decide whether steps 1-4 are needed):**
+
+A. **Done.** Qwen3.5-35B-A3B (`mcg` codebook) through the same tree: fused MoE decode doubles to triples decode speed (Evidence log). The tree and Windows are not the problem.
+B. **Confirm the codebook of the 30B pack.** Its `config.json` has no `codebook` key (quantiser 0.0.1), which means `3inst` **[I]**. Load log or `quantization_config` of the local pack; then check what the layers report (`multi.mul1`, `multi.mcg` in `block_sparse_mlp.py`).
+C. **Requantise the 30B with `-cb mul1`** (`convert.py`; the original bf16 weights are about 60 GB), then run the same A/B as in the log. This is the direct test. Unknown **[?]**: whether `convert.py` runs on this Windows build (the quantiser kernels are built for ROCm, the converter was never run here), how long it takes, and whether it fits (Windows sees 31.6 GB of the 128 GB RAM).
+D. **Optional second check on another architecture:** `turboderp/Laguna-XS-2.1-exl3` `4.00bpw` (`mul1`, hidden 2048, experts 512 wide, 256 experts, top 8).
+E. **Only if C is not wanted:** a fast decode path for `3inst` MoE packs on ROCm. That is kernel work (upstream has one in its ROCm layer), sized like S6-08 Option A' (days).
+
+Steps 0-4 below are the earlier plan and stay valid for a model that has a fast codebook and is still slow.
 
 Each step is cheap and can stop the task. No new scripts without the operator's consent (`scripts/windows/CLAUDE.md`); `tools/sweep.py` and the operator's `bench_http.py` (`wsl setup\docs\engine-comparison-20261031`) already exist.
 
@@ -64,6 +74,39 @@ Each step is cheap and can stop the task. No new scripts without the operator's 
 ## Evidence log
 
 (append dated entries here)
+
+### 2026-11-04: Qwen3.5-35B-A3B on the same tree: fused MoE decode makes it 3x faster; the 30B's cause is probably its codebook, not its width
+
+**Setup [V].** Tree `claude/modest-rubin-p69b5g` at `d0a0a45`, the installed default build, `serve` as in the install guide (plain decode, `--no-vision`, ctx 8192). Pack `turboderp/Qwen3.5-35B-A3B-exl3` branch `4.00bpw` (19.3 GB): hidden 2048, `moe_intermediate_size` 512, 256 experts, top 8, `codebook: mcg`, quantiser 0.0.22. `tools/bench.py` (a later copy with the UTF-8 decode fix, see the journal), 256 new tokens, greedy, prefill about 3.1K tokens, 3 repeats per cell (median). Two servers loaded side by side so the settings could alternate without restarts: A on port 8000 (default), B on port 8001 with `EXL3_DEC_MOE=0`. The operator left the machine alone only in part of the runs.
+
+| Round | A default: prose / chat / code | B `EXL3_DEC_MOE=0`: prose / chat / code |
+|---|---|---|
+| 1 | 47.0 / 47.5 / 46.5 | 16.4 / 16.4 / 16.5 |
+| 2 | 30.6 / 55.4 / 40.3 | 16.5 / 16.5 / 16.6 |
+| 3 | 55.1 / 55.0 / 55.0 | 14.3 / 16.5 / 16.4 |
+
+Decode tok/s. Round 4 was cut short by the operator. Median over the nine values: **A 47.5, B 16.5 (2.9x)**; best A 55.4 (3.3x), worst A 30.6 (1.8x); B never above 16.6. Prefill: A 1006-1016, B 988-995 tok/s. Earlier, not interleaved, default-only runs of the same server: 53.7 / 53.7 / 52.6, then 30.1 / 29.7 / 29.9, then 47.1 / 46.9 / 46.7 (prose / chat / code).
+
+**Variation.** A is noisy (30-55), B is steady. The operator reports that A depends on whether the machine is used (clicking, browsing) during a run; left alone it holds about 55 **[operator observation]**. The mechanism (the desktop sharing the GPU and memory with latency-sensitive fused kernels) is a guess **[?]**.
+
+**Dispatch, from the code [V by reading `block_sparse_mlp.py`; nothing in it depends on the OS]:**
+
+| Path | Needs |
+|---|---|
+| Fused batch-1 decode `exl3_dec_moe` | hidden and padded expert width multiples of 512; uniform `mul1` or `mcg`; K 2-6; no mixed-bitrate layer |
+| Grouped decode `exl3_moe_gfx12_k3` | multiples of 128; top-k 6, 8 or 10; K in 1-6, one K per layer; **`mul1` and not `mcg`** |
+| Anything else (`3inst`) | generic fallback; the fused kernel for `3inst` packs (`EXL3_MOE_FUSED_3INST`) is CUDA only |
+
+The code comment on the grouped gate says the original gate was "2560 / 640-768 / top-10 ... the Qwen3.8-Flash-Next pack only", so 768 is inside the grouped path's range.
+
+**Pack codebooks (`quantization_config` on the 4 bpw branches) [V]:** Qwen3-30B-A3B quantiser 0.0.1, no `codebook` key; Qwen3-Next-80B-A3B 0.0.6, no key; Qwen3.5-35B-A3B `mcg`; Laguna-XS-2.1 `mul1`; Qwen3.8-27B and Flash-Next `mul1`. A pack without the key predates the codebook option and is `3inst` **[I]**; the repo itself calls Qwen3-30B-A3B the `3INST` example (`block_sparse_mlp.py`, `_FUSED_3INST`).
+
+**Conclusion, with its limits.**
+- **[V]** On this Windows tree, MoE decode through the fused path reaches 47-55 tok/s on a 3 B-active model, inside the README's Linux range for Flash-Next (47-73). Without it the same model decodes at 16.5.
+- **[I]** The 30B's 9.8 tok/s is the same kind of fallback speed, so the likely cause is that its `3inst` pack has no fast MoE path in this fork. The 768 width is probably not the cause (the grouped path accepts it) but a `mul1` copy is needed to say so.
+- **Not proven:** the two models differ in layers, expert count and architecture, and the 9.8 was one run at 4K depth against these short-prompt runs. The decisive test is step C.
+- **Not measured:** Laguna-XS-2.1, a `mul1`/`mcg` copy of the 30B, the same-session baseline of step 0, any Linux run.
+- **Side finding:** `tools/bench.py` printed a UnicodeDecodeError traceback on this machine (cp1250 helper output); fixed on the `pr/windows-core` branch, harmless to the numbers.
 
 ## Links
 

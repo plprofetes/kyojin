@@ -358,8 +358,7 @@ def sdk_env(root: Path, base: dict[str, str]) -> dict[str, str]:
         env.setdefault("CXX", str(clang_cl))
         env["HIP_CLANG_PATH"] = str(clang_cl.parent)
     env["EXL3_ROCM_SDK"] = str(root)
-    # HOME: hgemm.cu and the Python tune caches use HOME (else /tmp); UTF-8 and no ABI probe noise from torch's compiler check
-    env.setdefault("HOME", env.get("USERPROFILE", ""))
+    # UTF-8 text files (the cp1250/cp1252 locale breaks read_text() without encoding) and no ABI probe noise from torch's compiler check
     env.setdefault("PYTHONUTF8", "1")
     env.setdefault("TORCH_DONT_CHECK_COMPILER_ABI", "1")
     env.setdefault("EXL3_HIP_DEFINES", DEFAULT_HIP_DEFINES)

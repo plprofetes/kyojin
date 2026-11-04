@@ -72,7 +72,29 @@ Add `"stream":true` and `curl.exe -N` for streaming. `"speculative":false` turns
 
 - GPU memory: torch reports 107.87 GiB; on an idle GPU, allocations in 256 MiB, 1 GiB and 4 GiB chunks ran out at about 100 to 101.75 GiB, and a single 88 GiB block worked while 96 GiB failed **[V]**. Plan for about 100 GiB in total, less if another program holds GPU memory. A pack of about 85 GiB plus cache is therefore not ruled out; the 95 GB and 100 GB packs are.
 - Windows sees only part of the RAM on the test machine (31.6 GB of 128 GB) **[V]**.
-- Tune caches: the C++ and Python writers use `HOME`, else `/tmp`. Without `HOME` that is `<drive>:\tmp\.cache\exllamav3`; set `HOME=%USERPROFILE%` to put it elsewhere.
+
+## Environment and caches
+
+The driver sets what each step needs and nothing system-wide; every step logs its environment (secrets redacted) in the run folder.
+
+| Step | Sets |
+|---|---|
+| `build` | `ROCM_HOME`, `ROCM_PATH`, `HIP_PATH`, `HIPCXX`, `HIP_DEVICE_LIB_PATH`, `PYTORCH_ROCM_ARCH=gfx1151`, `DISTUTILS_USE_SDK=1`, `CC`/`CXX` (the SDK's `clang-cl.exe`), `EXL3_ROCM_SDK`, `EXL3_HIP_DEFINES` (default `EXL3_HIP_STG_PAD`, as on Linux), `MAX_JOBS` (from free RAM, at most 6), `VSLANG=1033`, the VS developer environment |
+| `serve` | `PYTHONPATH` (the clone), `PYTHONUTF8=1`, `EXL3_ROCM_SDK` (the runtime JIT finds `hipcc.exe` from it; `ROCM_PATH` and `HIP_PATH` are deliberately not set) |
+
+Override the pins with `KYOJIN_ROCM_INDEX`, `KYOJIN_ROCM_VER`, `KYOJIN_TORCH_VER`, `KYOJIN_TRITON_SPEC` and `KYOJIN_PY`. Everything else is a normal `EXL3_*` switch from [env_vars.md](../env_vars.md).
+
+Per-user caches all live under your profile folder (`%USERPROFILE%`); the cache root is `HOME` if you set it, else `USERPROFILE`:
+
+| What | Where |
+|---|---|
+| Dense-GEMM tune file | `%USERPROFILE%\.cache\exllamav3\dense_gemm_tune.txt` (or `EXL3_DENSE_GEMM_TUNE_FILE`) |
+| JIT HIP kernels (`*.hsaco`) | `%USERPROFILE%\.cache\exllamav3` |
+| Triton | `%USERPROFILE%\.triton` (or `TRITON_CACHE_DIR`) |
+| Build objects | `build\` in the clone |
+| Run logs | `logs\windows\` in the clone (gitignored) |
+
+If you built with an earlier version of this guide, your tune file may be in `<drive>:\tmp\.cache\exllamav3`; move it to the folder above to keep the tuning.
 
 ## Moving the pins
 

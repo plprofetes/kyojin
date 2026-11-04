@@ -33,7 +33,8 @@ def seed_dense_tune(seed=None, path=None) -> int:
     if not seed.exists():
         return 0
     if path is None:
-        path = os.environ.get("EXL3_DENSE_GEMM_TUNE_FILE") or os.path.join(os.environ.get("HOME", "/tmp"), ".cache/exllamav3/dense_gemm_tune.txt")
+        from ..util.tune_cache import dense_live_path
+        path = dense_live_path()
     path = Path(path)
     key = lambda ln: tuple(ln.split()[:6])
     have = set()

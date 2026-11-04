@@ -160,15 +160,23 @@ static bool enabled()
 // every chunk length in the class
 static int m_class(int m) { return ((m + 255) / 256) * 256; }
 
+// HOME, else USERPROFILE (Windows only), else "/tmp": the same rule as home_dir() in util/tune_cache.py, which the Python
+// writers of this file use (model/dense_warmup.py, util/tune_cache.py), so all of them agree on one path
+static std::string home_dir()
+{
+    const char* h = getenv("HOME");
+    #ifdef _WIN32
+    if (!h) h = getenv("USERPROFILE");
+    #endif
+    return h ? h : "/tmp";
+}
+
 static std::string cache_path()
 {
     const char* p = getenv("EXL3_DENSE_GEMM_TUNE_FILE");
     if (p && *p) return p;
-    const char* h = getenv("HOME");
-    std::string d = std::string(h ? h : "/tmp") + "/.cache/exllamav3";
-    // HOME, else "/tmp", on every OS: the Python writers of this file (model/dense_warmup.py, util/tune_cache.py)
-    // use the same rule. On Windows set HOME=%USERPROFILE% to keep it out of <drive>:\tmp.
-    DTUNE_MKDIR((std::string(h ? h : "/tmp") + "/.cache").c_str());
+    std::string d = home_dir() + "/.cache/exllamav3";
+    DTUNE_MKDIR((home_dir() + "/.cache").c_str());
     DTUNE_MKDIR(d.c_str());
     return d + "/dense_gemm_tune.txt";
 }

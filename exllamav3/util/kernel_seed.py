@@ -38,7 +38,10 @@ def _cache_dir() -> Path:
     except Exception:   # noqa: BLE001
         pass
     d = os.environ.get("TRITON_CACHE_DIR")
-    return Path(d) if d else Path(os.environ.get("HOME", "/tmp")) / ".triton" / "cache"
+    if d:
+        return Path(d)
+    from .tune_cache import home_dir
+    return Path(home_dir()) / ".triton" / "cache"
 
 
 def seed_name(triton_version: str, arch: str) -> str:

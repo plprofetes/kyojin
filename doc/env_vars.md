@@ -988,7 +988,7 @@ Seconds the start-up warm-up may spend screening dense GEMM solutions. After tha
 shapes run untuned (bit-exact) and are tuned on first use. `0` never defers. The shipped tune
 seed makes a start on the pinned rocBLAS spend about 1 s here.
 
-#### `EXL3_DENSE_GEMM_TUNE_FILE` (default: `$HOME/.cache/exllamav3/dense_gemm_tune.txt`)
+#### `EXL3_DENSE_GEMM_TUNE_FILE` (default: `$HOME/.cache/exllamav3/dense_gemm_tune.txt`; `%USERPROFILE%` replaces `$HOME` on Windows when HOME is unset)
 
 The file that holds the tuned dense GEMM solution per shape class. Point it at a seeded file to
 skip the autotune; the GLM lane copies `tools/lanes/assets/tune_seed.txt` to the path it sets.

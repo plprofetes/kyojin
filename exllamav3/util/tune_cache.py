@@ -25,13 +25,26 @@ HDR = struct.Struct("<8sII")           # magic, format, record_size
 TUNING_DIR = "tuning"
 
 
+def home_dir() -> str:
+    """HOME, else USERPROFILE (Windows), else /tmp. The one rule for every per-user cache path that is not `~`-expanded:
+    cache_path() in hgemm.cu uses it too, so the C++ and Python writers of the dense-GEMM tune file agree. With HOME set
+    (always on Linux) this is exactly HOME."""
+    return os.environ.get("HOME", os.environ.get("USERPROFILE", "/tmp"))
+
+
 def live_cache_path() -> Path:
-    """Same resolution as disk_cache_path() in coop_autotune.cu (POSIX)."""
+    """Same resolution as disk_cache_path() in coop_autotune.cu."""
     o = os.environ.get("EXLLAMAV3_TUNE_CACHE")
     if o:
         p = Path(o)
         return p / "coop_autotune_v1.bin" if p.is_dir() else p
-    base = os.environ.get("XDG_CACHE_HOME") or str(Path(os.environ.get("HOME", "/tmp")) / ".cache")
+    if os.name == "nt":
+        local = os.environ.get("LOCALAPPDATA")
+        if not local:
+            appdata = Path(home_dir()) / "AppData" / "Local"
+            local = str(appdata if appdata.exists() else home_dir())
+        return Path(local) / "exllamav3" / "autotune" / "coop_autotune_v1.bin"
+    base = os.environ.get("XDG_CACHE_HOME") or str(Path(home_dir()) / ".cache")
     return Path(base) / "exllamav3" / "autotune" / "coop_autotune_v1.bin"
 
 
@@ -111,9 +124,9 @@ def merge_into(dst, srcs) -> int:
 
 
 def dense_live_path() -> Path:
-    """ROCm dense-GEMM tune file (hgemm.cu dtune): EXL3_DENSE_GEMM_TUNE_FILE or ~/.cache/exllamav3/dense_gemm_tune.txt."""
+    """ROCm dense-GEMM tune file (hgemm.cu dtune): EXL3_DENSE_GEMM_TUNE_FILE or <home_dir()>/.cache/exllamav3/dense_gemm_tune.txt."""
     o = os.environ.get("EXL3_DENSE_GEMM_TUNE_FILE")
-    return Path(o) if o else Path(os.environ.get("HOME", "/tmp")) / ".cache/exllamav3/dense_gemm_tune.txt"
+    return Path(o) if o else Path(home_dir()) / ".cache/exllamav3/dense_gemm_tune.txt"
 
 
 def merge_dense_text(dst, src) -> int:

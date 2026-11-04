@@ -114,7 +114,7 @@ def load_words(corpus):
 
 def sh(cmd):
     try:
-        return subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=20).stdout.strip()
+        return subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20).stdout.strip()
     except Exception:
         return ""
 

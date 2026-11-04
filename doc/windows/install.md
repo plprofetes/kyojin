@@ -21,9 +21,8 @@ Status: written from the first successful run (2026-10-30/31) and **not yet repe
 Clone to a short path without spaces, with symlinks enabled. Use the explicit `uv run --no-project python ...` form: `uv run --no-project scripts\windows\kyojin_win.py` failed with "os error 3" on the target **[V]**, and plain `uv run` inside the repo would install the project (CPU/CUDA torch).
 
 ```powershell
-git clone -c core.symlinks=true https://github.com/plprofetes/kyojin C:\k
+git clone -c core.symlinks=true https://github.com/Yamz-Labs/kyojin C:\k
 cd C:\k
-git checkout claude/modest-rubin-p69b5g   # until the Windows branch is merged
 uv run --no-project python scripts/windows/kyojin_win.py doctor
 uv run --no-project python scripts/windows/kyojin_win.py setup
 uv run --no-project python scripts/windows/kyojin_win.py build

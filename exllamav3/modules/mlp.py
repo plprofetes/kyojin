@@ -20,6 +20,9 @@ from .quant.exl3 import VERIFY_FUSE, MAX_BSZN_GEMV_R, dec_workspace
 from .quant.exl3 import row_pad_pitch as _row_pad_pitch
 import os
 
+# EXL3_DEC_GU=1 (default off): batch-1 plain decode runs gate and up in ONE exl3_dec_gemv_multi launch. Module global: a harness may flip it.
+DEC_GU = {"on": os.environ.get("EXL3_DEC_GU", "0") == "1"}
+
 MAX_BSZN = 8  # must match MAX_BSZN in exllamav3_ext/libtorch/mlp.h and block_sparse_mlp.py
 
 class MLP(Module):
@@ -776,7 +779,35 @@ class GatedMLP(Module):
                     scratch, counters = dec_workspace(x.device)
                     ext.exl3_dec_gemv_r_multi(
                         x.view(rows, dim), [gi.trellis, ui.trellis], [gi.suh, ui.suh], [gi.svh, ui.svh],
-                        [g.view(rows, -1), u.view(rows, -1)], scratch, counters, [gi.K, ui.K], False)
+                        [g.view(rows, -1), u.view(rows, -1)], scratch, counters, [gi.K, ui.K], False,
+                        # ktw/kbs of ONE gate call, as plain decode launches gate and up separately (bit-equal rounding)
+                        (gi.out_features + 511) // 512)
+                    a = torch.empty_like(u, dtype = torch.half) if self.interm_dtype != torch.half else u
+                    self.activation_fn_call(g, u, a, self.act_limit)
+                    d_ = self.downs[s].forward(a, params, torch.half if nc2_half else None)
+                    if d is None: d = d_
+                    else: d += d_
+                    del d_
+                    continue
+
+                # Batch-1 plain decode, gate+up in ONE exl3_dec_gemv_multi launch (both Hadamard stages inside) instead of two
+                # exl3_dec_gemv launches. Same per-job arithmetic as the two launches when the k split matches: with
+                # EXL3_DEC_KBS_TAB the tabled kbs applies to equal-N jobs; without it pick_ktw must land on the same ktw for
+                # 2 x strips (the Qwen3.8 27B: ktw 8 either way). Same activation call as the unfused branch below.
+                if (
+                    DEC_GU["on"] and bsz * q_len == 1 and self.bc is None and x.dtype == torch.half and x.is_contiguous() and
+                    "capture" not in params and "ovr" not in params and hasattr(ext, "exl3_dec_gemv_multi") and
+                    _vf_plain_exl3(self.gates[s], dim) and _vf_plain_exl3(self.ups[s], dim) and
+                    self.gates[s].inner.K == self.ups[s].inner.K and
+                    self.gates[s].out_features == self.ups[s].out_features
+                ):
+                    gi, ui = self.gates[s].inner, self.ups[s].inner
+                    g = torch.empty((bsz, q_len, gi.out_features), dtype = gi.default_out_dtype, device = x.device)
+                    u = torch.empty((bsz, q_len, ui.out_features), dtype = ui.default_out_dtype, device = x.device)
+                    scratch, counters = dec_workspace(x.device)
+                    ext.exl3_dec_gemv_multi(
+                        x.view(1, dim), [gi.trellis, ui.trellis], [gi.suh, ui.suh], [gi.svh, ui.svh],
+                        [g.view(1, -1), u.view(1, -1)], scratch, counters, [float(gi.K), float(ui.K)])
                     a = torch.empty_like(u, dtype = torch.half) if self.interm_dtype != torch.half else u
                     self.activation_fn_call(g, u, a, self.act_limit)
                     d_ = self.downs[s].forward(a, params, torch.half if nc2_half else None)

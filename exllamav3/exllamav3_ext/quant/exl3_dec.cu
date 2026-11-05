@@ -2053,6 +2053,18 @@ static int env_int(const char* name, int dflt)
     return e ? atoi(e) : dflt;
 }
 
+// EXL3_DEC_KBS_TAB=1 (default off): k blocks per strip for the dense MLP shapes of the Qwen3.8 27B pack (K 5120 <-> N 17408,
+// mul1 4 bpw), measured on gfx1151 (kernel grid, doc/windows/journal.md). EXL3_DEC_KBS_GU / EXL3_DEC_KBS_DN set the values
+// (the grid's plateaus: gate/up 17..30, down 5..12). The key is (K, N, kb2) of one matrix (fused gate+up has equal N), so plain
+// decode, fused verify and the R-row kernel pick the same kbs and round alike. The global EXL3_DEC_KBS wins; 0 = no entry.
+static int kbs_forced(int K, int N, int kb2, int env_forced)
+{
+    if (env_forced > 0 || N <= 0 || env_int("EXL3_DEC_KBS_TAB", 0) == 0 || kb2 != 8) return env_forced;
+    if (K == 5120 && N == 17408) return env_int("EXL3_DEC_KBS_GU", 0);
+    if (K == 17408 && N == 5120) return env_int("EXL3_DEC_KBS_DN", 0);
+    return env_forced;
+}
+
 inline int kb2_of(double K)
 {
     const int kb2 = (int) (K * 2.0 + 0.5);
@@ -2294,7 +2306,9 @@ static void dec_gemv_impl
     Jobs jobs;
     jobs.count = n;
     jobs.K = Kdim;
-    jobs.kbs = kbs_of(Kdim / 16, ktw, env_int("EXL3_DEC_KBS", 0));
+    bool same_n = true;
+    for (int i = 1; i < n; ++i) same_n = same_n && out[i].size(-1) == out[0].size(-1);
+    jobs.kbs = kbs_of(Kdim / 16, ktw, kbs_forced(Kdim, same_n ? (int) out[0].size(-1) : 0, kb2, env_int("EXL3_DEC_KBS", 0)));
     jobs.x_gstride = (int) x_gstride;
 #if QWG_ABLATE
     jobs.abl = env_int("EXL3_QWG_DABL", 0);
@@ -2645,7 +2659,8 @@ static void dec_gemv_r_impl
     at::Tensor& scratch,
     at::Tensor& counters,
     const std::vector<double>& K,
-    bool mcg
+    bool mcg,
+    int64_t strips_hint = 0     // > 0: pick ktw as if the launch had this many strips (the strips of ONE equivalent single call)
 )
 {
     const at::cuda::OptionalCUDAGuard device_guard(x.device());
@@ -2664,12 +2679,21 @@ static void dec_gemv_r_impl
     // this is what makes the block-reduce partition, and so the rounding, match batch-1 exactly.
     const int min_blocks = env_int("EXL3_DEC_MIN_BLOCKS", 32);
     const int forced = env_int("EXL3_DEC_KTW", 0);
-    const int ktw = pick_ktw(Kdim / 16, strips_total, ring_of_kb2(kb2), min_blocks, forced);
-    const int kbs = kbs_of(Kdim / 16, ktw, env_int("EXL3_DEC_KBS", 0));
+    // strips_hint (as in dec_gemv_impl) keeps ktw the per-matrix value when matrices that plain decode launches
+    // separately are fused here (mlp.py gate+up): otherwise a min_blocks threshold between 1x and 2x the strips
+    // gives verify another ktw than plain decode, hence another rounding. strips_total stays the real grid for WIDE8.
+    const int strips_pick = strips_hint > 0 ? (int) strips_hint : strips_total;
+    const int ktw = pick_ktw(Kdim / 16, strips_pick, ring_of_kb2(kb2), min_blocks, forced);
+    bool same_n = true;
+    for (int i = 1; i < n; ++i) same_n = same_n && out[i].size(-1) == out[0].size(-1);
+    const int kbs = kbs_of(Kdim / 16, ktw, kbs_forced(Kdim, same_n ? (int) out[0].size(-1) : 0, kb2, env_int("EXL3_DEC_KBS", 0)));
+    // k_split hands a block up to ceil(G / kbs) groups; kbs from pick_ktw gives exactly ktw, a forced or tabled kbs can give more.
+    // The LDS row budget, the 6-row and the 8-row single-pass conditions follow the larger of the two.
+    const int ktw_blk = std::max(ktw, (Kdim / 128 + kbs - 1) / kbs);
     // EXL3_GEMV_R_RPB caps rows per block (grid.y = ceil(R / rpb) row chunks, each re-reading the
     // weights). Null result (glm-mtp step 4): RM 4 spills a little at KB2 >= 8 but a cap of 1 or 2
     // always lost (lm_head R 4: 1.81 ms default vs 3.53 ms cap 2; R 3 verify 80.4 vs 94.5 ms).
-    int rpb = std::max(1, std::min(std::min(R, GEMV_R_ROW_BUDGET / ktw), MOE_R_MAX));
+    int rpb = std::max(1, std::min(std::min(R, GEMV_R_ROW_BUDGET / ktw_blk), MOE_R_MAX));
     const int rpb_cap = env_int("EXL3_GEMV_R_RPB", 0);
     if (rpb_cap > 0) rpb = std::min(rpb, rpb_cap);
     // (MiMo, R 5..8 verify, bitwise independent of rpb): the 8-row kernel variant wins at R 5-6
@@ -2682,7 +2706,7 @@ static void dec_gemv_r_impl
     // no VGPR spill at K*2 = 8 / 10) instead of a 4-row chunk plus a 1..2 row chunk. Same per-row arithmetic (rows are independent
     // in lane_gemv_r1 / pair_dot_r), rows 1..4 keep their own instantiations untouched.
     const bool rm6 = R >= 5 && R <= 6 && (kb2 == 8 || kb2 == 10) && env_int("EXL3_GEMV_R_RM6", 0) != 0 &&
-                     env_int("EXL3_GEMV_R_DEC1", 0) == 1 && GEMV_R_ROW_BUDGET / ktw >= R;
+                     env_int("EXL3_GEMV_R_DEC1", 0) == 1 && GEMV_R_ROW_BUDGET / ktw_blk >= R;
     if (rm6) rpb = R;
 
     // EXL3_GEMV_R_WIDE8=1 (needs EXL3_GEMV_R_DEC1=1): rows from EXL3_GEMV_R_WIDE8_MINR (default 5) up run in ONE launch of the
@@ -2693,7 +2717,7 @@ static void dec_gemv_r_impl
     // kernel, -2.9/-3.9 ms on the 5-row verify at 4K/131K in situ); rm6 covers kb2 8 / 10 and still wins there.
     const bool wide8 = R >= env_int("EXL3_GEMV_R_WIDE8_MINR", 5) && R <= MOE_R_MAX && env_int("EXL3_GEMV_R_WIDE8", 0) != 0 &&
                        env_int("EXL3_GEMV_R_DEC1", 0) == 1 &&
-                       (GEMV_R_ROW_BUDGET / ktw >= R || (ktw % 16 == 0 && ktw <= 64)) &&      // ktw 32 / 48 / 64: staged in 16-tile phases
+                       (GEMV_R_ROW_BUDGET / ktw_blk >= R || (kbs == Kdim / 16 / (WPB * ktw) && ktw % 16 == 0 && ktw <= 64)) &&      // ktw 32 / 48 / 64: staged in 16-tile phases
                        strips_total * kbs >= env_int("EXL3_GEMV_R_WIDE8_MINBLK", 32);          // one pass runs half the blocks of the two 4-row chunks: it loses when the grid gets sparse
     if (wide8) rpb = R;
 
@@ -2791,10 +2815,11 @@ void exl3_dec_gemv_r_multi
     at::Tensor& scratch,
     at::Tensor& counters,
     const std::vector<double>& K,
-    bool mcg
+    bool mcg,
+    int64_t strips_hint
 )
 {
-    dec_gemv_r_impl(x, trellis, suh, svh, out, scratch, counters, K, mcg);
+    dec_gemv_r_impl(x, trellis, suh, svh, out, scratch, counters, K, mcg, strips_hint);
 }
 
 void exl3_dec_gemv_r

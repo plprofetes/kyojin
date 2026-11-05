@@ -24,7 +24,7 @@ Status is edited in each task file; this table is generated: `python scripts/win
 | 1 | S6-01 | [CI tier 2: build the Windows ROCm wheel on a hosted runner (manual)](01-ci-windows-rocm-wheel.md) | todo | S5-02 |
 | 2 | S6-02 | [Installer and release bundle: download, install, serve](02-installer-and-bundle.md) | todo | S6-01 |
 | 3 | S6-03 | [Upstream PR from a clean branch (PM files stay in the fork)](03-upstream-pr.md) | todo | S5-01, S2-03 |
-| 4 | S6-04 | [Load Qwen3.8-Flash-Next 2.18bpw (about 85 GiB)](04-flash-next-85gib.md) | todo | S1-04 |
+| 4 | S6-04 | [Run Qwen3.8-Flash-Next on Windows: smoke test, step up, n-gram placement, GPU dedicated memory](04-flash-next-85gib.md) | todo | S1-04 |
 | 5 | S6-05 | [Windows equivalents for the Linux-only memory code](05-windows-host-memory.md) | todo | S4-05 |
 | 6 | S6-06 | [CI tier 1: always-on Linux checks for the Windows port](06-ci-tier1-checks.md) | todo | S5-03 |
 | 7 | S6-07 | [CI tier 3: written local GPU release gate](07-local-release-gate.md) | todo | S5-01 |

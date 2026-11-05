@@ -152,6 +152,36 @@ class Pure(Quiet):
         self.assertEqual(c[-2:], ["--draft-policy", "mtp"])    # last occurrence wins in argparse
 
 
+class CiMode(Quiet):
+    def test_wheel_tag_drops_the_torch_local_part(self):
+        self.assertEqual(kw.wheel_tag("10.1.0a20260822", "2.15.0a0+rocm10.1.0a20260822"), "+rocm10.1.0a20260822.torch2.15.0a0")
+        self.assertEqual(kw.wheel_tag("7.2.0", "2.9.1"), "+rocm7.2.0.torch2.9.1")     # no local part to drop
+
+    def test_wheel_tag_is_a_valid_local_version(self):
+        import re
+        tag = kw.wheel_tag(kw.ROCM_VER, kw.TORCH_VER)
+        self.assertRegex(tag, r"^\+[A-Za-z0-9]+(\.[A-Za-z0-9]+)*$")      # PEP 440 local version: alphanumerics and dots
+
+    def test_wheel_command(self):
+        c = kw.wheel_command("py", "10.1.0", "2.15.0a0+rocm10.1.0")
+        self.assertEqual(c[:3], ["py", "setup.py", "egg_info"])
+        self.assertIn("--tag-build=+rocm10.1.0.torch2.15.0a0", c)
+        self.assertLess(c.index("egg_info"), c.index("bdist_wheel"))             # the tag must be set before the wheel is built
+        self.assertEqual(c[-2:], ["--dist-dir", "dist"])
+
+    def test_ci_relax_downgrades_only_the_optional_fails(self):
+        cs = [kw.Check("gpu", kw.FAIL, "no AMD adapter"), kw.Check("disk", kw.FAIL, "14 GB"), kw.Check("symlinks", kw.FAIL, "text"),
+              kw.Check("vs", kw.FAIL, "no VS"), kw.Check("uv", kw.FAIL, "no uv"), kw.Check("gpu2", kw.PASS, "ok"), kw.Check("disk_ok", kw.PASS)]
+        kw.ci_relax(cs)
+        self.assertEqual([c.status for c in cs], [kw.WARN, kw.WARN, kw.WARN, kw.FAIL, kw.FAIL, kw.PASS, kw.PASS])
+        self.assertIn("--ci", cs[0].summary)
+
+    def test_ci_relax_keeps_a_passing_check_untouched(self):
+        c = kw.Check("gpu", kw.PASS, "Radeon")
+        kw.ci_relax([c])
+        self.assertEqual((c.status, c.summary), (kw.PASS, "Radeon"))
+
+
 class RunTests(Quiet):
     def setUp(self):
         super().setUp()

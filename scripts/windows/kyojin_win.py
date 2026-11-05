@@ -40,7 +40,7 @@ import urllib.request
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-VENV = REPO / ".venv-win"
+VENV = Path(os.environ.get("KYOJIN_VENV") or REPO / ".venv-win")   # KYOJIN_VENV: put the venv on another drive (CI runners)
 LOG_ROOT = REPO / "logs" / "windows"
 
 # --- pins: one place. Verified on the AMD index from a Linux box (wheel METADATA read over HTTP range requests):
@@ -61,6 +61,7 @@ UV_FLAGS = ["--no-config", "--managed-python"]     # ignore user/system uv.toml,
 MIN_FREE_GB = 40          # estimate: SDK devel ~12 GB + torch + build tree
 GB_PER_JOB = 4            # estimate for hipcc; Kyojin's Linux default is MAX_JOBS=6 ("unbounded ninja OOMs the box")
 DEFAULT_HIP_DEFINES = "EXL3_HIP_STG_PAD"   # same default as tools/strix_halo/rebuild.sh
+CI_OPTIONAL = ("gpu", "disk", "symlinks")   # preflight FAILs that do not stop a build-only run on a hosted runner (--ci)
 
 log = logging.getLogger("kyojin_win")
 
@@ -363,6 +364,25 @@ def sdk_env(root: Path, base: dict[str, str]) -> dict[str, str]:
     env.setdefault("TORCH_DONT_CHECK_COMPILER_ABI", "1")
     env.setdefault("EXL3_HIP_DEFINES", DEFAULT_HIP_DEFINES)
     return env
+
+
+def ci_relax(checks: list) -> None:
+    """--ci: a hosted runner has no AMD adapter, less disk than a workstation and a checkout without symlinks. None of that
+    stops a build-only run, so those FAILs become WARNs (the numbers stay in the report)."""
+    for c in checks:
+        if c.name in CI_OPTIONAL and c.status == FAIL:
+            c.status = WARN
+            c.summary += " (--ci: not required for a build-only run)"
+
+
+def wheel_tag(rocm_ver: str, torch_ver: str) -> str:
+    """Local version tag of the ROCm wheel, in the style of the CUDA wheels (+cu128-torch2.11.0): torch's own local part
+    ('+rocm...') is dropped because a version has only one '+'."""
+    return f"+rocm{rocm_ver}.torch{torch_ver.split('+')[0]}"
+
+
+def wheel_command(py: str, rocm_ver: str, torch_ver: str, dist: str = "dist") -> list[str]:
+    return [py, "setup.py", "egg_info", f"--tag-build={wheel_tag(rocm_ver, torch_ver)}", "bdist_wheel", "--dist-dir", dist]
 
 
 def serve_command(py: str, model: str, port: int, ctx: int, extra: list[str] | None = None) -> list[str]:
@@ -1114,6 +1134,8 @@ def remove_venv() -> Check | None:
 
 def cmd_setup(run: Run, args) -> int:
     host_probes(run)
+    if args.ci:
+        ci_relax(run.checks)
     if any(c.status == FAIL for c in run.checks):
         log.error("preflight failed; fix the FAIL items above before setup continues")
         return run.summary()
@@ -1160,8 +1182,11 @@ def cmd_setup(run: Run, args) -> int:
     log.info("pip freeze saved to %s (pin from it once a build works)", run.dir / "pip-freeze.txt")
     sdk = run.add(probe_rocm_sdk(run))
     env = build_env(run, sdk)
-    run.add(probe_torch(run, env))
-    run.add(probe_triton(run, env))
+    if args.ci:
+        run.add(Check("gpu_probes", SKIP, "--ci: torch and Triton need a GPU, skipped"))
+    else:
+        run.add(probe_torch(run, env))
+        run.add(probe_triton(run, env))
     return run.summary()
 
 
@@ -1198,7 +1223,10 @@ def cmd_build(run: Run, args) -> int:
             log.info("clean: removing %s", p)
             shutil.rmtree(p, ignore_errors=True) if p.is_dir() else p.unlink(missing_ok=True)
     # setup.py build_ext --inplace (not pip -e): leaves build\\temp.*\\Release\\build.ninja in place for the ninja -k 0 pass below
-    cmd = [str(venv_python()), "setup.py", "build_ext", "--inplace", "-v"]
+    if args.wheel:
+        cmd = wheel_command(str(venv_python()), ROCM_VER, TORCH_VER)
+    else:
+        cmd = [str(venv_python()), "setup.py", "build_ext", "--inplace", "-v"]
     r = run.run(cmd, "build-extension", env=env, cwd=REPO, timeout=4 * 3600, stream=True)
     if not r.ok:
         # first failure stops ninja; rerun with -k 0 so ONE round trip returns every compile error (link errors come later)
@@ -1212,6 +1240,16 @@ def cmd_build(run: Run, args) -> int:
             if failed:
                 r = r2
     pyds = sorted(p.name for p in REPO.glob("exllamav3_ext*.pyd"))
+    wheels = sorted(p.name for p in (REPO / "dist").glob("*.whl")) if args.wheel else []
+    if args.wheel:
+        if r.ok and not wheels:
+            run.add(Check("build", FAIL, "bdist_wheel succeeded but dist/ has no wheel", {"log": r.logfile.name},
+                          "read the build-extension log for 'creating' / 'adding' lines"))
+        elif r.ok:
+            run.add(Check("build", PASS, f"{r.seconds / 60:.1f} min; wheel: {wheels}", {"log": r.logfile.name, "wheels": wheels}))
+        else:
+            run.add(run.fail_step(r, "build exllamav3_ext wheel", cmd, "search the log for 'FAILED:' (ninja prints the failing command after it)"))
+        return run.summary()      # a wheel build leaves no .pyd in the repository root to import
     if r.ok and not pyds:
         run.add(Check("build", FAIL, "install succeeded but no exllamav3_ext*.pyd was produced", {"log": r.logfile.name},
                       "was EXLLAMA_NOCOMPILE set? run `build --clean`; check the log for 'building exllamav3_ext'"))
@@ -1219,7 +1257,7 @@ def cmd_build(run: Run, args) -> int:
         run.add(Check("build", PASS, f"{r.seconds / 60:.1f} min; artifacts: {pyds}", {"log": r.logfile.name, "pyd": pyds}))
     else:
         run.add(run.fail_step(r, "build exllamav3_ext", cmd, "search the log for 'FAILED:' (ninja prints the failing command after it)"))
-    if r.ok:
+    if r.ok and not args.ci:
         run.add(probe_extension(run, env))
     return run.summary()
 
@@ -1266,10 +1304,13 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("doctor", help="read-only preflight and probes")
     s = sub.add_parser("setup", help="create .venv-win and install ROCm torch, triton-windows, requirements")
     s.add_argument("--recreate", action="store_true", help="delete and recreate .venv-win first")
-    b = sub.add_parser("build", help="compile exllamav3_ext (editable install)")
+    s.add_argument("--ci", action="store_true", help="hosted runner: no GPU, small disk, no symlinks are warnings; skip the torch/Triton GPU probes")
+    b = sub.add_parser("build", help="compile exllamav3_ext (in place, or a wheel with --wheel)")
     b.add_argument("--jobs", type=int, help="override MAX_JOBS (default from free RAM, max 6)")
     b.add_argument("--clean", action="store_true", help="delete build/ and old .pyd first")
     b.add_argument("--verbose-build", action="store_true", help="set EXLLAMA_VERBOSE/VERBOSE for setuptools")
+    b.add_argument("--wheel", action="store_true", help="build dist/exllamav3-<ver>+rocm<rocm>.torch<torch>-cp312-cp312-win_amd64.whl instead of an in-place .pyd")
+    b.add_argument("--ci", action="store_true", help="hosted runner: do not import the extension after the build (no GPU)")
     sub.add_parser("check", help="torch/GPU, Triton and extension smoke tests")
     sv = sub.add_parser("serve", help="run tools/qwen/serve.py on a small pack")
     sv.add_argument("--model", required=True)

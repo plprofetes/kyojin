@@ -1,6 +1,6 @@
 # Run Qwen3.8-Flash-Next on Windows: smoke test, step up, n-gram placement, GPU dedicated memory
 
-- Status: todo (plan written 2026-11-05)
+- Status: todo
 - Depends: S1-04
 - Risk: MEDIUM-HIGH: first run of the Flash-Next kernels (n-gram gather, PLE, grouped MoE decode with 640-wide experts, more JIT kernels) on Windows; the host RAM Windows shows is only 31.6 GB; the best trade between GPU-dedicated and host memory is unknown.
 

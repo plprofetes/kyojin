@@ -465,3 +465,11 @@ Running log, appended as the session goes. Machine: Windows 11, AMD Radeon 8060S
 - Operator decision: the Windows question is answered; no higher-bit quants for now. Phases 2 to 4 of the plan (3.05 and 4.05 bpw, SSD against RAM, lower dedicated memory) were not run and are in [deferred.md](deferred.md) with their trigger. Detail and numbers: [S6-04 Evidence](sprints/s6-scale-and-speed/04-flash-next-85gib.md).
 - Open, not solved: plain decode of 25 tok/s on a 2-bit quant is below the bandwidth bound; cause unknown **[?]**. Also found on the way: the `localhost` 2 s delay (earlier entry), the Windows swap read-back `TypeError` line at every start (S6-05).
 - Docs only; no code changed. The Windows PRs (`pr/windows-core`, `pr/windows-driver`) are unaffected.
+
+## 2026-11-05: S6-01 started: a Windows ROCm wheel builds on a hosted runner
+
+- Branch `ci/windows-rocm` (on `pr/windows-driver`): `.github/workflows/windows-rocm.yml` plus `setup --ci`, `build --ci`, `build --wheel` in the driver. After two small failures (a diagnostic's `vswhere` argument; the driver's Windows 11 check, the runner is Windows Server 2022) the wheel builds green: setup 1 min, compile 25 to 30 min, wheel 32 MB **[V]**. Details and run numbers: [S6-01](sprints/s6-scale-and-speed/01-ci-windows-rocm-wheel.md).
+- Runner: 4 vCPU, 16 GB, D: 220 GB free. The assessment's 14 GB disk constraint does not hold on this image **[V]**.
+- Cache experiment in progress (exact-match key, restore everywhere, save outside PRs, `cache=skip` / label `no-cache` / `CACHE_EPOCH` to skip or bust, weekly clean build). Not proven until a hit run shows ninja skipping the compile.
+- Separately: `build.yml` `windows_smoke` (CUDA) fails on `pr/windows-core` in `fq_gemv_kq.cu` (torch header, `std` ambiguous); the file is older than the PRs. A control run on plain upstream would confirm it is upstream's problem **[?]**.
+- Docs only; the workflow and driver changes are on the `ci/windows-rocm` branch and not in any pull request.

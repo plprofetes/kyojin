@@ -1,6 +1,6 @@
 # CI tier 2: build the Windows ROCm wheel on a hosted runner (manual)
 
-- Status: todo
+- Status: active
 - Depends: S5-02
 - Risk: HIGH: nothing is known about a hosted-runner build (time, RAM, arch detection without a GPU); needs the user's consent for the workflow target.
 
@@ -31,9 +31,13 @@ Sprint: [Sprint 6: ship it and scale](README.md) · ID S6-01 · priority order 1
 - **Prerequisite on the user side:** Actions must be enabled in the fork (disabled by default on forks).
 - **Not covered by this job:** `check`, `serve`, any GPU run, numeric checks; a released wheel still needs a manual test on the Strix Halo machine.
 
-**Evidence.** (run folders, versions, numbers; fill in)
+**Evidence.** Branch `ci/windows-rocm` on `plprofetes/kyojin`, stacked on `pr/windows-driver`; workflow `.github/workflows/windows-rocm.yml` (a separate file, as assessed), driver options `setup --ci`, `build --ci`, `build --wheel`.
 
-- 
+- **Runs on the fork (2026-11-05), `windows-2022`:** #1 failed in my own diagnostic step (`vswhere` takes one `-property`); #2 failed in the driver's `host` preflight (**the runner is Windows Server 2022, build 20348, not Windows 11**), so `--ci` now relaxes `host`, `gpu`, `disk` and `symlinks`; **#3 green**: setup 1 min, `build --ci --wheel` **25.2 min**, wheel `exllamav3-1.8.9+rocm10.1.0a20260822.torch2.15.0a0-cp312-cp312-win_amd64.whl`, 32 MB, containing `exllamav3_ext.cp312-win_amd64.pyd` (94 MB uncompressed) **[V]**; #4 green, build step 29.7 min (the same job varies by about 5 min).
+- **Runner facts [V]:** AMD EPYC 7763 / 9V74 (varies), 4 logical CPUs, 16 GB RAM (13.5 free), **C: 78 GB and D: 220 GB free** (the "14 GB SSD" worry of the assessment does not apply to this image), Visual Studio Enterprise 2022 17.14.37827, `uv` 0.13.7. Suggested build jobs 3. `rocm-sdk init` works without a GPU.
+- **Not verified:** the CI wheel was never imported or run (no GPU on the runner); a manual import on the Strix Halo machine is the missing check (`pip install --no-deps --target`, then `import torch, exllamav3_ext` from a neutral directory).
+- **Build cache (experiment, in progress):** restoring `build/` plus the hipified `*.hip`/`*_hip.*`/`hip_*.*` files under an exact-match key (extension sources + `setup.py`, the pins read from the driver, runner image version, `CACHE_EPOCH`); restore everywhere, save only outside pull requests; skip with `cache=skip` or the `no-cache` label, the Monday run is a clean build. Cache size 36 MB compressed. First hit attempt failed in a diagnostic because the hipified sources live in the source tree, not in `build/` (fixed). **Whether ninja treats restored objects as up to date after the timestamp reset is not yet shown**; if the hit run still recompiles, the cache steps are removed.
+- **Related check that failed, not caused by this work [V]:** `build.yml` target `windows_smoke` (CUDA) on `pr/windows-core` failed compiling `foreign_quant/fq_gemv_kq.cu` with `error C2872: 'std': ambiguous symbol` inside torch's `compiled_autograd.h` (torch 2.11, MSVC 14.39). That file is in the tree since 1.7.0 and untouched by the PR; the control run on plain upstream (`check/upstream-main-1.8.9`) was not dispatched.
 
 **Links.** [existing workflow](../../../../.github/workflows/build.yml) · [S5-02 decision](../s5-harden/02-ci-feasibility.md) · next: [S6-02](02-installer-and-bundle.md)
 

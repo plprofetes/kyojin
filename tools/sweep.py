@@ -166,7 +166,9 @@ def measure(a, out: Path, env_over: dict, tag: str, txt: str, tok=None) -> dict:
                 text = r["choices"][0]["message"].get("content") or ""
                 rec["requests"].append({
                     "depth": d, "prompt": int(s["prompt"]), "cached": int(s["cached"]), "new": int(s["new"]),
-                    "prefill_tps": round(int(s["prompt"]) / float(s["prefill_s"]), 1) if float(s["prefill_s"]) else None,
+                    "prefill_tps": round((int(s["prompt"]) - int(s["cached"])) / float(s["prefill_s"]), 1)
+                                   if float(s["prefill_s"]) and int(s["prompt"]) > int(s["cached"]) else None,
+                    "prefill_basis": "uncached",   # tokens actually computed; tokens served from the prefix cache are not counted
                     "decode_tps": round(int(s["new"]) / float(s["generate_s"]), 2) if float(s["generate_s"]) else None,
                     "sha1": hashlib.sha1(text.encode()).hexdigest(), "text": text})
     except Exception as e:  # noqa: BLE001 - recorded, the sweep goes on
@@ -282,6 +284,11 @@ def report(out: Path, md: Path | None = None) -> None:
     meta = json.loads((out / "meta.json").read_text(encoding="utf8"))
     recs = [json.loads(l) for l in (out / "results.jsonl").read_text(encoding="utf8").splitlines() if l.strip()]
     depths = meta["depths"]
+    for r in recs:   # results written before 2026-11-05 divided the whole prompt, cached tokens included, by the prefill time
+        for q in r.get("requests", []):
+            if q.get("prefill_basis") != "uncached" and q.get("prefill_tps"):
+                q["prefill_tps"] = round(q["prefill_tps"] * (q["prompt"] - q["cached"]) / q["prompt"], 1) if q["prompt"] > q["cached"] else None
+                q["prefill_basis"] = "uncached"
 
     def vals(rs, d, m):
         return [q[m] for r in rs if r["status"] == "ok" for q in r["requests"] if q["depth"] == d and q[m]]

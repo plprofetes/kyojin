@@ -45,6 +45,35 @@ jobs:
       - name: Free disk after setup
         run: Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{n='FreeGB';e={[math]::Round($_.Free/1GB,1)}} | Format-Table
 
+      # The compile is 25 of the 26 minutes. The build tree is cached under a key that hashes every input (extension sources,
+      # setup.py, the pins, the driver, this file) and the runner image version, and there is no restore-keys fallback: a hit
+      # means the inputs are byte-identical, so the objects are valid; any other change builds in full.
+      - name: Cache key
+        id: meta
+        run: |
+          "image=$env:ImageVersion" >> $env:GITHUB_OUTPUT
+
+      - name: Restore the build tree (exact match only)
+        id: objcache
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: winrocm-build-${{ steps.meta.outputs.image }}-${{ hashFiles('exllamav3/exllamav3_ext/**', 'setup.py', 'pyproject.toml', 'requirements.txt', 'scripts/windows/constraints-win.txt', 'scripts/windows/kyojin_win.py', '.github/workflows/windows-rocm.yml') }}
+
+      # ninja rebuilds an object when an input is newer than it. After a checkout and a fresh venv every input is newer than
+      # the restored objects, so give the inputs an old timestamp (the restored objects keep theirs), then show with
+      # `ninja -d explain` what, if anything, it would still rebuild.
+      - name: Make the restored objects count as up to date
+        if: steps.objcache.outputs.cache-hit == 'true'
+        run: |
+          $old = [datetime]'2020-01-01'
+          foreach ($d in 'exllamav3\exllamav3_ext', '.venv-win\Lib\site-packages\torch\include', '.venv-win\Lib\site-packages\_rocm_sdk_devel') {
+            if (Test-Path $d) { Get-ChildItem $d -Recurse -File | ForEach-Object { $_.LastWriteTime = $old } }
+          }
+          $nj = Get-ChildItem build -Recurse -Filter build.ninja | Select-Object -First 1
+          "build.ninja: $($nj.FullName)"
+          & .venv-win\Scripts\ninja.exe -C $nj.DirectoryName -n -d explain | Select-Object -First 25
+
       - name: Build the wheel
         run: uv run --no-project python scripts/windows/kyojin_win.py build --ci --wheel
 

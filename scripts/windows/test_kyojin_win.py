@@ -170,10 +170,11 @@ class CiMode(Quiet):
         self.assertEqual(c[-2:], ["--dist-dir", "dist"])
 
     def test_ci_relax_downgrades_only_the_optional_fails(self):
-        cs = [kw.Check("gpu", kw.FAIL, "no AMD adapter"), kw.Check("disk", kw.FAIL, "14 GB"), kw.Check("symlinks", kw.FAIL, "text"),
-              kw.Check("vs", kw.FAIL, "no VS"), kw.Check("uv", kw.FAIL, "no uv"), kw.Check("gpu2", kw.PASS, "ok"), kw.Check("disk_ok", kw.PASS)]
+        cs = [kw.Check("host", kw.FAIL, "Windows build 20348"), kw.Check("gpu", kw.FAIL, "no AMD adapter"), kw.Check("disk", kw.FAIL, "14 GB"),
+              kw.Check("symlinks", kw.FAIL, "text"), kw.Check("visual_studio", kw.FAIL, "no VS"), kw.Check("uv", kw.FAIL, "no uv"),
+              kw.Check("gpu2", kw.PASS, "ok"), kw.Check("disk_ok", kw.PASS)]
         kw.ci_relax(cs)
-        self.assertEqual([c.status for c in cs], [kw.WARN, kw.WARN, kw.WARN, kw.FAIL, kw.FAIL, kw.PASS, kw.PASS])
+        self.assertEqual([c.status for c in cs], [kw.WARN, kw.WARN, kw.WARN, kw.WARN, kw.FAIL, kw.FAIL, kw.PASS, kw.PASS])
         self.assertIn("--ci", cs[0].summary)
 
     def test_ci_relax_keeps_a_passing_check_untouched(self):

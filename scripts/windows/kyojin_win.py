@@ -61,7 +61,7 @@ UV_FLAGS = ["--no-config", "--managed-python"]     # ignore user/system uv.toml,
 MIN_FREE_GB = 40          # estimate: SDK devel ~12 GB + torch + build tree
 GB_PER_JOB = 4            # estimate for hipcc; Kyojin's Linux default is MAX_JOBS=6 ("unbounded ninja OOMs the box")
 DEFAULT_HIP_DEFINES = "EXL3_HIP_STG_PAD"   # same default as tools/strix_halo/rebuild.sh
-CI_OPTIONAL = ("gpu", "disk", "symlinks")   # preflight FAILs that do not stop a build-only run on a hosted runner (--ci)
+CI_OPTIONAL = ("host", "gpu", "disk", "symlinks")   # preflight FAILs that do not stop a build-only run on a hosted runner (--ci)
 
 log = logging.getLogger("kyojin_win")
 
@@ -367,8 +367,8 @@ def sdk_env(root: Path, base: dict[str, str]) -> dict[str, str]:
 
 
 def ci_relax(checks: list) -> None:
-    """--ci: a hosted runner has no AMD adapter, less disk than a workstation and a checkout without symlinks. None of that
-    stops a build-only run, so those FAILs become WARNs (the numbers stay in the report)."""
+    """--ci: a hosted runner is Windows Server rather than Windows 11, has no AMD adapter, less disk than a workstation and
+    may check out without symlinks. None of that stops a build-only run, so those FAILs become WARNs (the numbers stay in the report)."""
     for c in checks:
         if c.name in CI_OPTIONAL and c.status == FAIL:
             c.status = WARN

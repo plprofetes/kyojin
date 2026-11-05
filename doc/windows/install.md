@@ -4,14 +4,16 @@ Native Windows, not WSL2. One target: Windows 11 x64, AMD Ryzen AI Max (gfx1151)
 
 ## Status
 
-Verified on one machine (ASUS ProArt PX13, Ryzen AI Max+ 395, 128 GB, Adrenalin 32.0.32015.7029) with dense Qwen packs only, from a build made by the steps below. Not yet repeated from a clean machine; reports are welcome (attach the `logs\windows\...` folder, see the end).
+Verified on one machine (ASUS ProArt PX13, Ryzen AI Max+ 395, 128 GB, Adrenalin 32.0.32015.7029), including a run of the steps below from a fresh clone on release 1.8.9. Reports from other machines are welcome (attach the `logs\windows\...` folder, see the end).
 
 | Works **[V]** | Not verified |
 |---|---|
 | Build of `exllamav3_ext` (MSVC host, clang-cl, hipcc), about 12 min | MoE packs (Qwen3.5-35B-A3B, Flash-Next, GLM, MiMo, DeepSeek) |
 | Qwen3.5-9B and Qwen3.8-27B (EXL3 4.00 bpw) through `tools/qwen/serve.py`, 27B with MTP, identical text at temperature 0 | `tools/glm/serve.py`, `tools/mimo/serve.py` |
+| Qwen3.5-35B-A3B (MoE, `mcg` codebook, 4.00 bpw): about 2700 tok/s prefill, 47 to 55 tok/s decode | Flash-Next, GLM, MiMo and DeepSeek MoE packs |
 | JIT HIP kernels `gdn_hf` and `ple` (bitwise equal to the fallback on one prompt) | JIT kernels `gr_mix`, `qsa_pf` |
 | A 13-request soak and a distinct-prompt soak with no TDR | Packs larger than about 85 GiB (see GPU memory below) |
+|  | Old public packs without a codebook entry (for example `turboderp/Qwen3-30B-A3B-exl3`): they decode at about 10 tok/s here, probably because the fast MoE decode kernels need a `mul1` or `mcg` pack **[?]** |
 
 Linux-only server features (swap read-back, page-cache control) degrade quietly. Single runs, not benchmarks: Qwen3.5-9B decodes 33 tok/s, Qwen3.8-27B 12.6 tok/s plain and 14.4 tok/s with MTP on prose.
 

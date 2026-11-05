@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One-command benchmark against a running Kyojin server (OpenAI-style API).
 
-    python tools/bench.py                      # http://localhost:8000/v1, model taken from /v1/models
+    python tools/bench.py                      # http://localhost:8000/v1 (127.0.0.1 on Windows), model taken from /v1/models
     python tools/bench.py --base http://localhost:8000/v1 --reps 3
 
 Standard library only. Method and decode prompts are the ones behind the numbers in README.md:
@@ -324,7 +324,10 @@ def gpu_model():
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--base", default="http://localhost:8000/v1", help="OpenAI-style base URL")
+    # On Windows "localhost" resolves to ::1 first; the server listens on IPv4 only, and Windows takes about 2 s to refuse
+    # a connection to a closed local port, so every request would carry that delay (prefill tok/s read 3x too low)
+    ap.add_argument("--base", default="http://127.0.0.1:8000/v1" if os.name == "nt" else "http://localhost:8000/v1",
+                    help="OpenAI-style base URL")
     ap.add_argument("--model", help="model id (default: first id from /models)")
     ap.add_argument("--reps", type=int, default=3, help="runs per measurement (default 3)")
     ap.add_argument("--max-tokens", type=int, default=128)

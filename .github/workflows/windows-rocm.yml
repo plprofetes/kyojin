@@ -36,7 +36,7 @@ on:
       - "scripts/windows/**"
       - ".github/workflows/windows-rocm.yml"
   push:
-    branches: [main, ci/windows-rocm]      # ci/windows-rocm is temporary: lets the workflow run from its own branch while it is worked on
+    branches: [main]
     paths:
       - "exllamav3/exllamav3_ext/**"
       - "setup.py"

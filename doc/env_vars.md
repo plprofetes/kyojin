@@ -7,6 +7,10 @@ Boolean-ish variables treat `0` as off and any other value as on unless noted. C
 variables are read once (on first use) and cached; Python-side variables are read at import
 time. Either way, set them before loading a model.
 
+Every switch the code reads (720+, most not described here yet) is listed with its default, read site and nearest code
+comment in [knobs.md](knobs.md) (generated: `python tools/knobs.py doc`). CI (`.github/workflows/knobs.yml`) fails when a
+new switch is not mentioned on this page. Measured effects per model: [benchmarks/sweeps/](benchmarks/sweeps/README.md).
+
 ## Persistent prompt cache (GLM, Qwen, DS4.1 servers)
 
 Prompt-cache pages are written to the NVMe in the background, so a restarted server (or a session resumed the next day)
@@ -1397,3 +1401,20 @@ smaller than the target cache (a DFlash2 drafter).
 `N:thf,thv,maxd,thfd,thvd`: above N context tokens the MTP draft tier rule switches to these thresholds and draft depth
 (`QWSPEC_THF/THV/THFD/THVD` set the base tiers). Needed only with `EXL3_QDEC=0` or `EXL3_QDEC_ROWS=0`, where the
 Triton verify makes deep drafts expensive: `96000:0.45,0.2,4,0.8,0.6`.
+
+#### `EXL3_DEC_KBS_TAB`, `EXL3_DEC_KBS_GU`, `EXL3_DEC_KBS_DN` (default `0`, `0`, `0`; read per call; ROCm dense decode GEMV)
+
+`EXL3_DEC_KBS_TAB=1` applies a per-matrix number of k blocks (`kbs`) to the dense MLP shapes of the Qwen3.8 27B pack (mul1, 4 bpw):
+`EXL3_DEC_KBS_GU` for the gate/up shape (5120 -> 17408) and `EXL3_DEC_KBS_DN` for the down shape (17408 -> 5120). The key is
+(K, N, bits) of one matrix, so plain decode, fused verify and the R-row kernel pick the same value and round alike. A value of 0
+keeps the `ktw` rule; the global `EXL3_DEC_KBS` wins over the table. Kernel grid on gfx1151 (journal 2026-11-01): gate/up 22..40 and
+down 6..12 are 5-8 % faster than the default (5 and 17); gate/up values above about 30 can exceed the shared scratch in the R-row
+fused call. The values change the rounding relative to the default, so replies can differ. Not yet confirmed end to end.
+
+#### `EXL3_DEC_GU` (default `0`; read at import; ROCm dense MLP decode)
+
+`EXL3_DEC_GU=1` runs gate and up of a dense `GatedMLP` in one `exl3_dec_gemv_multi` launch at batch 1 (plain decode) instead of two
+`exl3_dec_gemv` launches: one launch fewer per layer, both Hadamard stages stay inside. The per-job arithmetic equals the two single
+launches when both pick the same k split: always with `EXL3_DEC_KBS_TAB=1` (the tabled value applies to equal-N jobs), and without it when
+`pick_ktw` gives the same `ktw` for 2 x the strips (the Qwen3.8 27B: `ktw` 8 either way). Eligible only for plain EXL3 linears with equal K and
+width; verify rows (R > 1) keep the existing `EXL3_VERIFY_FUSE` path. Not yet measured end to end.

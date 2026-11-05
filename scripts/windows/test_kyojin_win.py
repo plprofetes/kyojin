@@ -1,4 +1,6 @@
 """Logic tests for kyojin_win.py. Stdlib unittest, no torch/GPU/Windows needed:  python -m unittest scripts/windows/test_kyojin_win.py"""
+import contextlib
+import io
 import json
 import re
 import os
@@ -12,7 +14,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import kyojin_win as kw  # noqa: E402
 
 
-class Pure(unittest.TestCase):
+class Quiet(unittest.TestCase):
+    """The driver prints its summaries and error blocks; the tests that trigger them on purpose keep that out of the test output."""
+    def setUp(self):
+        stack = contextlib.ExitStack()
+        stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+        stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
+        self.addCleanup(stack.close)
+
+
+class Pure(Quiet):
     def test_redact(self):
         r = kw.redact_env({"HF_TOKEN": "x", "GITHUB_PAT": "y", "MY_API_KEY": "z", "PATH": "p", "HOME": "h"})
         self.assertEqual(r["HF_TOKEN"], "<redacted>")
@@ -141,8 +152,9 @@ class Pure(unittest.TestCase):
         self.assertEqual(c[-2:], ["--draft-policy", "mtp"])    # last occurrence wins in argparse
 
 
-class RunTests(unittest.TestCase):
+class RunTests(Quiet):
     def setUp(self):
+        super().setUp()
         self.tmp = tempfile.TemporaryDirectory()
         self.run_ = kw.Run("unit", verbose=False, root=Path(self.tmp.name))
 
@@ -187,7 +199,7 @@ class RunTests(unittest.TestCase):
         self.assertEqual(rep[1]["hint"], "do this")
 
 
-class HelpfulErrors(unittest.TestCase):
+class HelpfulErrors(Quiet):
     SAMPLES = {
         "uv-project-sync": "Creating virtual environment at: .venv",
         "winsock-provider": "OSError: [WinError 10106] Żądany dostawca usług nie został załadowany lub zainicjowany",
@@ -267,7 +279,7 @@ class HelpfulErrors(unittest.TestCase):
         self.assertIn("no known signature", kw.render_failure("t", ["x"], 1, 1.0, "l", [], [], ""))
 
 
-class FailStep(unittest.TestCase):
+class FailStep(Quiet):
     def test_fail_step_writes_failure_md_and_check(self):
         with tempfile.TemporaryDirectory() as t:
             run = kw.Run("unit", verbose=False, root=Path(t))
@@ -295,8 +307,9 @@ class FailStep(unittest.TestCase):
 
 
 @unittest.skipIf(kw.is_windows(), "Linux-side behaviour of Windows-only probes")
-class ProbesOffWindows(unittest.TestCase):
+class ProbesOffWindows(Quiet):
     def setUp(self):
+        super().setUp()
         self.tmp = tempfile.TemporaryDirectory()
         self.run_ = kw.Run("unit", verbose=False, root=Path(self.tmp.name))
 

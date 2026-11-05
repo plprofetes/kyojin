@@ -106,6 +106,8 @@ The code comment on the grouped gate says the original gate was "2560 / 640-768 
 - **[I]** The 30B's 9.8 tok/s is the same kind of fallback speed, so the likely cause is that its `3inst` pack has no fast MoE path in this fork. The 768 width is probably not the cause (the grouped path accepts it) but a `mul1` copy is needed to say so.
 - **Not proven:** the two models differ in layers, expert count and architecture, and the 9.8 was one run at 4K depth against these short-prompt runs. The decisive test is step C.
 - **Not measured:** Laguna-XS-2.1, a `mul1`/`mcg` copy of the 30B, the same-session baseline of step 0, any Linux run.
+- **Knob sweep on the 35B (2026-11-04):** ten MoE arms, report [qwen35-35b-a3b-4bpw-off.md](../../../benchmarks/sweeps/qwen35-35b-a3b-4bpw-off.md). The machine was not quiet (baseline noise +-16 % / +-10 % on decode). Only `EXL3_DEC_MOE=0` is a real effect (-60 %); no tuning arm beat the noise, so the defaults stay. Not worth repeating before a model with a fast codebook shows a gap.
+- **Correction of what "new" means:** Qwen3-30B-A3B is the original Qwen3 generation (quantiser 0.0.1), older than Qwen3.5 / 3.6 / 3.8, which all run here. Its slowness is a property of the pack, not of newer models failing on Windows.
 - **Side finding:** `tools/bench.py` printed a UnicodeDecodeError traceback on this machine (cp1250 helper output); fixed on the `pr/windows-core` branch, harmless to the numbers.
 
 ## Links

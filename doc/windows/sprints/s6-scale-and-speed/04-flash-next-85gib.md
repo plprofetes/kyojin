@@ -1,6 +1,6 @@
 # Run Qwen3.8-Flash-Next on Windows: smoke test, step up, n-gram placement, GPU dedicated memory
 
-- Status: todo
+- Status: done
 - Depends: S1-04
 - Risk: MEDIUM-HIGH: first run of the Flash-Next kernels (n-gram gather, PLE, grouped MoE decode with 640-wide experts, more JIT kernels) on Windows; the host RAM Windows shows is only 31.6 GB; the best trade between GPU-dedicated and host memory is unknown.
 
@@ -110,11 +110,22 @@ Evidence log table (quant, n-gram mode, dedicated setting, GPU/host memory, load
 3. `serve --model <dir> -c 8192` (small context first); watch GPU memory (`Dedicated Usage`) and the host RAM during the load.
 4. One greedy request; then the soak commands from S4-05 with a short context.
 
+## Closing note (2026-11-05, operator decision)
+
+Closed after Phase 1: the Windows question ("does the Flash-Next model class run here") is answered yes, and the operator is not pursuing higher-bit quants now. **Not run:** Phase 2 (3.05 and 4.05 bpw), Phase 3 (n-gram table on SSD against in RAM), Phase 4 (lowering the GPU-dedicated memory). They are listed in [deferred.md](../../deferred.md) with their trigger. The predictions in this file for those phases remain **[I]**.
+
 ## Evidence
 
-(run folders, versions, numbers; fill in)
+Run 2026-11-05, ASUS ProArt PX13 (Ryzen AI Max+ 395, Radeon 8060S, driver 32.0.32015.7029), Windows 11, hands-off unless stated. Tree: `pr/windows-driver` at `9bc3561` (upstream 1.8.9 plus the Windows code) in `C:\k2`, default build. Pack: `turboderp/Qwen3.8-Flash-Next-exl3` branch `2.05bpw_h4_ng4`, 58.4 GiB on disk of which the n-gram table is 24.4 GiB, codebook `mul1`. Driver defaults: `serve`, ctx 8192, `--no-vision`, `--draft-policy off`.
 
--
+- **Loads and answers [V].** "2 + 2 equals **4**." (finish `stop`). The first request took 4.04 s for 19 prompt tokens and 0.41 s for 9 new tokens: first-use cost, not speed.
+- **Start-up [V]:** target model 41 s, warm-up 115 s (of which the dense-GEMM tuning took 94 s and used up its 90 s budget, "remaining classes tune at first use"), `READY` after 173 s. A second start was not timed.
+- **Log lines [V]:** `[ngram] placement: disk (default: disk streaming); table 24.4 GiB, host MemAvailable ?` (host memory cannot be read on Windows, S6-05); `[moe_fused] all 48 MoE layers run the fused half-layer` (the Flash-Next fused decode kernel is active); `speculative=False`; no `hc_gs_sidecar.safetensors` and no `draft2s.st` in this pack; the swap read-back prints a `TypeError` that is the known Linux-only check failing quietly.
+- **GPU memory at idle [V, Task Manager]:** dedicated 42.0 / 95.8 GB, shared 4.3 / 15.8 GB, total 46 / 112 GB. So the 24.4 GiB table is not on the GPU: weights 34 GiB plus about 8 GiB of KV, workspaces and slack **[I for the split]**. The shared limit equals half of the 31.6 GB Windows sees; total addressable is about 64 + D/2 GB for a dedicated setting of D GB **[I, one data point]**.
+- **Host memory [V]:** server process working set 8.8 GB, private 12 GB; whole system 22 GB in use at idle (about 13 GB of it other programs), 25 to 26 GB while streaming; 8.8 GB free of 31.6 GB.
+- **Speed, `tools/bench.py` through 127.0.0.1, 256 new tokens [V].** Five back-to-back hands-off runs (`bench-flashnext-2p05-spread.txt`): decode 26.2, 26.2, 26.3, 25.0, 24.9 tok/s (prose / chat / code agree within 0.3), prefill at about 2K tokens 1173, 1076, 1091, 1075, 1072 tok/s. Earlier runs on the same server: 1113 prefill / 24.7 decode (first run, tuning not finished), and 1185 / 20.9 to 21.4 (a run with the machine in use, cause not established **[?]**). Quiet-machine figures: **decode about 25 to 26 tok/s, prefill about 1075 to 1170 tok/s**.
+- **Reading:** these are not comparable with the README's Linux figures (95 GB pack, speculation on, 8K and longer contexts). Plain decode of 25 tok/s on a 2-bit quant is below what the memory bandwidth would allow; the cause is **not found** **[?]**. Candidates: mixed-bitrate layers, the per-token n-gram reads, host-side time.
+- **Sizing for larger quants [I, not run]:** weights without the table are 48.8 GiB (3.05 bpw) and 63.6 GiB (4.05 bpw); with about 8 GiB overhead, about 57 and 72 GB of dedicated memory, inside the 95.8 GB pool. The open risk is host memory (about 6 to 10 GB free on this machine, or more with other programs closed).
 
 **Links.** [S1-04 ceiling](../s1-risk-spikes/04-gpu-memory-ceiling.md) · [S6-05 host memory](05-windows-host-memory.md) · [S6-09 (35B-A3B and the MoE dispatch)](09-qwen3-30b-a3b-moe-decode.md) · [deferred.md](../../deferred.md) · [env_vars.md](../../../env_vars.md) (`EXL3_NGRAM_*`)
 

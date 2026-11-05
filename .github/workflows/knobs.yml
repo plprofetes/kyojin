@@ -1,0 +1,29 @@
+name: Knobs
+run-name: Switches documented (env vars and build flags)
+
+# Naive gate: every environment variable / build flag the code reads must be mentioned in doc/env_vars.md,
+# unless it predates the gate (doc/knobs_undocumented.txt). Stdlib only, no engine import, a few seconds.
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  knobs:
+    name: switches documented
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check
+        run: python tools/knobs.py check

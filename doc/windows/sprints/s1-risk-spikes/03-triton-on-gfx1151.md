@@ -1,0 +1,31 @@
+# Spike: Triton kernels run on gfx1151 via triton-windows
+
+- Status: done
+- Depends: S1-01
+- Risk: HIGH. 43 modules import triton at module level and Qwen3.5's Gated DeltaNet layers use the vendored FLA Triton kernels. Support is documented for RDNA3.5 but untested with Kyojin's kernels.
+
+Sprint: [Sprint 1: risk spikes (fail fast)](README.md) · ID S1-03 · priority order 3 in the sprint
+
+**Goal.** Show that triton-windows compiles and runs both a trivial kernel and a real Kyojin kernel on this GPU.
+
+**Steps.**
+1. `kyojin_win.py check` and read the `triton` probe (vector add).
+2. Test a real Kyojin kernel WITHOUT importing `exllamav3` (that would start the 72-file JIT build and fail on Windows, see [review #6](../../review/opus-r1.md)): put `exllamav3\vendor` on `sys.path` and `import fla`; its modules import nothing from exllamav3 at module level. Run the standalone chunk-kernel-vs-naive-recurrence test (added with the user's consent, never run yet): `.venv-win\Scripts\python scripts\windows\fla_standalone_test.py` (tiny shapes, cold Triton compile dominates), then `--qwen` for the T=4096 prefill-sized timing (reference loop is slow). It prints one `SUMMARY` line to paste back; exit code 0 pass, 1 mismatch, 2 crash.
+3. The default pin is `triton-windows==3.9.0.post30` (torch 2.15 pairs with Triton 3.9 in the triton-windows README table; 3.9.0.post30 packs WMMA operands to fix excess VGPR use on gfx11/12). If it fails, fall back with `KYOJIN_TRITON_SPEC=triton-windows==3.8.0.post29` (Kyojin's Linux pin is triton 3.8.0) and run `setup` again. Always `import torch` before `import triton` (TheRock requirement).
+4. Note which C compiler Triton picked (clang-cl from the SDK vs MSVC) in the journal.
+
+**Done when.**
+- Vector add and the chosen Kyojin kernel match the reference; versions recorded.
+
+**If it fails.** Decision gate: if Triton is unusable, Qwen3.5 (GDN layers) cannot run. Options: a different triton-windows build; torch fallbacks for the needed kernels (large work); a Qwen architecture without GDN (a dense full-attention Qwen, support in `serve.py` unverified [?]).
+
+**Evidence.** (run folders, versions, numbers; fill in)
+
+- 
+
+**Links.** [triton probe](../../../../scripts/windows/kyojin_win.py) · [vendored FLA kernels](../../../../exllamav3/vendor/fla) · [assessment §4.3](../../assessment.md) · next: [S1-04](04-gpu-memory-ceiling.md)
+
+Depends on: [S1-01](01-preflight-green.md)
+
+- 2026-10-30, `check` after the probe-from-file fix: **[V] the `triton` probe PASSED on the target** (triton-windows 3.9.0.post30, vector add on gfx1151, run while another LLM held the GPU). Details (compiler used, timing) not yet seen; ask for that run's `report.json`. Still open: a real Kyojin Triton kernel (step 2) and the 3.8.0.post29 comparison if needed.
+- 2026-10-30, `fla_standalone_test.py` (T=100, H=2, HV=4, K=128) on gfx1151, torch 2.15.0a0+rocm10.1.0a20260822, triton-windows 3.9.0.post30: **[V] PASS**. Vendored FLA gated-delta-rule chunk kernels vs the naive fp32 recurrence: output max|diff| 2.28e-04 (max|ref| 4.73e-02), state max|diff| 1.06e-03 (max|ref| 4.30e-01). Cold run 49.9 s (Triton compile/autotune), warm 0.7 ms. `import fla` took 1.58 s; `IS_AMD=True`. Triton warns `TRITON_DEFAULT_FP_FUSION` is unset (default flips in 3.10). Not yet done: `--qwen` (T=4096 timing), which C compiler Triton picked (not printed), the 3.8.0.post29 comparison (not needed).

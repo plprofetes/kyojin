@@ -1,0 +1,29 @@
+# Full extension build: triage compile and link errors
+
+- Status: done
+- Depends: S1-02
+- Risk: HIGH volume of unknowns: 72 TUs, clang device code, MSVC host code, `moe_mul1.cpp` Windows branch marked UNVERIFIED by its authors.
+
+Sprint: [Sprint 2: the full extension builds and imports](README.md) · ID S2-01 · priority order 1 in the sprint
+
+**Goal.** `build` completes.
+
+**Steps.**
+1. `kyojin_win.py -v build --jobs 2` (start low), read `FAILURE.md`, fix, rebuild. Note: on Windows+HIP ninja tracks no header dependencies, so after editing a header delete `build\` (`build --clean`). To see every compile error in one round trip run `ninja -k 0` in the generated `build\temp.*` directory ([review notes](../../review/opus-r1-notes.md)). Already fixed before the first run (unverified): `hgemm.cu` 2-arg `mkdir`, `rocblas` link library, `ext.py` JIT guard, `DISTUTILS_USE_SDK`/clang-cl environment ([patches](../../review/patches/README.md)). `build` now runs `setup.py build_ext --inplace` and, on failure, `ninja -k 0` so one round trip returns every compile error (`ninja-failed.txt`). Still open: whether `lib\hipblas.lib` and `lib\rocblas.lib` exist.
+2. Suspect TUs from the assessment: [moe_mul1.cpp](../../../../exllamav3/exllamav3_ext/cpu/moe_mul1.cpp), [stloader.cpp](../../../../exllamav3/exllamav3_ext/stloader.cpp), [avx*_target](../../../../exllamav3/exllamav3_ext/avx2_target.cpp), [cuda_drv.cpp](../../../../exllamav3/exllamav3_ext/cuda_drv.cpp), [ngram_gather_win.cpp](../../../../exllamav3/exllamav3_ext/ngram_gather_win.cpp), [hgemm.cu](../../../../exllamav3/exllamav3_ext/hgemm.cu), [bindings.cpp](../../../../exllamav3/exllamav3_ext/bindings.cpp).
+3. Gate every fix for Windows (`_WIN32`/`__linux__`, `windows` in `setup.py`) so Linux behaviour is unchanged.
+4. Log each fix (file, cause, change) in the journal; add a signature for every new error shape.
+
+**Done when.**
+- `build` PASS; `.pyd` present; build time recorded.
+
+**If it fails.** If a TU cannot compile: first understand why it is needed for Qwen. Excluding it (via `build_config.py`) is a last resort and must be recorded in [deferred.md](../../deferred.md) with the feature it disables.
+
+**Evidence.** (run folders, versions, numbers; fill in)
+
+- 2026-10-30, Windows 11 / Ryzen AI Max+ 395 (gfx1151), VS Build Tools 17.14 (MSVC 14.44.35207), SDK 10.0.28000.0, torch 2.15.0a0+rocm10.1.0a20260822: `exllamav3_ext.cp312-win_amd64.pyd` builds and links with `build` (about 12 min for a full compile at 4 jobs) **[V]**. Failures met on the way, each fixed and catalogued: VsDevCmd capture quoting (empty env, caused `link.exe` not found and probably the Winsock 10106), ninja not on PATH (distutils fallback with `-Xcompiler /EHsc`), `moe_mul1.cpp` target macros under clang-cl, `__truncsfhf2` at link (`clang_rt.builtins`). See the journal entries of 2026-10-30.
+- 
+
+**Links.** [build_config.py](../../../../exllamav3/exllamav3_ext/build_config.py) · [assessment §3-4](../../assessment.md) · next: [S2-02](02-import-and-dll-resolution.md)
+
+Depends on: [S1-02](../s1-risk-spikes/02-hip-extension-spike.md)

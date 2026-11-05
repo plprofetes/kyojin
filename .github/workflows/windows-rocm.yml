@@ -4,13 +4,61 @@ run-name: Windows ROCm wheel (gfx1151, build only)
 # Builds exllamav3_ext for Windows against AMD's ROCm torch (gfx1151) with scripts/windows/kyojin_win.py and uploads the wheel
 # as a workflow artifact. Build only: a hosted runner has no AMD GPU, so nothing is imported or run, and the wheel is never
 # released from here. The CUDA wheels are build.yml's job; nothing there builds ROCm.
+#
+# When it runs: on pull requests and pushes to main that touch the build (paths below), every Monday (a clean build, which also
+# notices AMD removing a pinned nightly), and by hand (Actions > Windows ROCm wheel > Run workflow).
+#
+# Build cache (the compile is about 25 of the 26 minutes). The key hashes only what changes the compiled objects, so it is the
+# same on every commit and PR that leaves the extension alone:
+#   - the extension sources and setup.py, the torch/ROCm/Triton pins and default HIP defines (read from kyojin_win.py), the
+#     runner image version (a new Visual Studio is a new toolchain), and CACHE_EPOCH below.
+#   - exact match only, no restore-keys fallback: Windows+HIP builds do not track header dependencies, so reusing objects
+#     after a source change could silently keep stale ones.
+# A pull request restores the cache saved from main; only runs that are not pull requests save one (a PR cache would be
+# visible to that PR only).
+#   skip the cache once ... Run workflow with cache=skip, or put the label `no-cache` on the pull request and re-run
+#   start every cache afresh ... bump CACHE_EPOCH (GitHub caches are immutable: a key cannot be overwritten)
+#   delete one by hand ... Actions > Caches, or `gh cache delete <key>`
 on:
   workflow_dispatch:
-  push:                          # temporary: lets the workflow run from its own branch while it is being worked on
-    branches: [ci/windows-rocm]
+    inputs:
+      cache:
+        description: "Build cache: use = restore it when there is one; skip = clean build, nothing restored"
+        type: choice
+        options: [use, skip]
+        default: use
+  pull_request:
+    paths:
+      - "exllamav3/exllamav3_ext/**"
+      - "setup.py"
+      - "pyproject.toml"
+      - "requirements.txt"
+      - "scripts/windows/**"
+      - ".github/workflows/windows-rocm.yml"
+  push:
+    branches: [main, ci/windows-rocm]      # ci/windows-rocm is temporary: lets the workflow run from its own branch while it is worked on
+    paths:
+      - "exllamav3/exllamav3_ext/**"
+      - "setup.py"
+      - "pyproject.toml"
+      - "requirements.txt"
+      - "scripts/windows/**"
+      - ".github/workflows/windows-rocm.yml"
+  schedule:
+    - cron: "17 4 * * 1"                   # Mondays 04:17 UTC, a clean build
 
 permissions:
   contents: read
+
+# A newer push to a branch or pull request replaces the run in progress. main (and so the weekly run) is never cancelled:
+# it is the run that saves the cache the pull requests restore.
+concurrency:
+  group: windows-rocm-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CACHE_EPOCH: "1"
+  PYTHONUTF8: "1"
 
 jobs:
   wheel:
@@ -20,11 +68,6 @@ jobs:
     defaults:
       run:
         shell: pwsh
-    env:
-      # uv's cache on the same drive as the checkout and the venv (D:, about 220 GB free on windows-2022), so uv hardlinks
-      # the wheels instead of copying them
-      UV_CACHE_DIR: D:\uv-cache
-      PYTHONUTF8: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,39 +82,55 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
+      - name: Cache mode and key
+        id: cache
+        env:
+          EVENT: ${{ github.event_name }}
+          CACHE_INPUT: ${{ inputs.cache }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          SOURCES_HASH: ${{ hashFiles('exllamav3/exllamav3_ext/**', 'setup.py') }}
+        run: |
+          $restore = $true; $why = 'default'
+          if ($env:EVENT -eq 'schedule') { $restore = $false; $why = 'weekly run: clean build' }
+          elseif ($env:CACHE_INPUT -eq 'skip') { $restore = $false; $why = 'dispatch input cache=skip' }
+          elseif (",$env:LABELS," -like '*,no-cache,*') { $restore = $false; $why = 'pull request label no-cache' }
+          $save = $env:EVENT -ne 'pull_request'
+          # the pins, read from the driver (stdlib only), so unrelated driver edits do not change the key
+          $pins = uv run --no-project python -c "import sys; sys.path.insert(0, 'scripts/windows'); import kyojin_win as k; print('_'.join([k.TORCH_VER, k.ROCM_VER, k.TRITON_SPEC, k.DEFAULT_HIP_DEFINES, k.GFX]))"
+          $key = "winrocm-v$($env:CACHE_EPOCH)-$($env:ImageVersion)-$pins-$($env:SOURCES_HASH)"
+          "restore=$($restore.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          "save=$($save.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          "key=$key" >> $env:GITHUB_OUTPUT
+          "### Build cache`n- restore: **$restore** ($why)`n- save when built: **$save**`n- key: ``$key``" >> $env:GITHUB_STEP_SUMMARY
+          "restore=$restore ($why) save=$save"
+          "key=$key"
+
       - name: Setup (pinned ROCm torch, SDK and requirements)
         run: uv run --no-project python scripts/windows/kyojin_win.py setup --ci
 
       - name: Free disk after setup
         run: Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{n='FreeGB';e={[math]::Round($_.Free/1GB,1)}} | Format-Table
 
-      # The compile is 25 of the 26 minutes. The build tree is cached under a key that hashes every input (extension sources,
-      # setup.py, the pins, the driver, this file) and the runner image version, and there is no restore-keys fallback: a hit
-      # means the inputs are byte-identical, so the objects are valid; any other change builds in full.
-      - name: Cache key
-        id: meta
-        run: |
-          "image=$env:ImageVersion" >> $env:GITHUB_OUTPUT
-
-      - name: Restore the build tree (exact match only)
-        id: objcache
-        uses: actions/cache@v4
+      # The build tree plus the files torch's hipify writes into the source tree (the patterns .gitignore lists): the objects
+      # were compiled from them, so they must come back together. Keep this path list identical in the save step.
+      - name: Restore the build tree
+        id: restore
+        if: steps.cache.outputs.restore == 'true'
+        uses: actions/cache/restore@v4
         with:
-          # the build tree, plus the files torch's hipify writes into the source tree (the same patterns .gitignore lists);
-          # the objects were compiled from them, so they must come back with the objects
           path: |
             build
             exllamav3/exllamav3_ext/**/*.hip
             exllamav3/exllamav3_ext/**/*_hip.*
             exllamav3/exllamav3_ext/**/hip_*.*
             !exllamav3/exllamav3_ext/hip/hip_mma.cuh
-          key: winrocm-build-${{ steps.meta.outputs.image }}-${{ hashFiles('exllamav3/exllamav3_ext/**', 'setup.py', 'pyproject.toml', 'requirements.txt', 'scripts/windows/constraints-win.txt', 'scripts/windows/kyojin_win.py', '.github/workflows/windows-rocm.yml') }}
+          key: ${{ steps.cache.outputs.key }}
 
       # ninja rebuilds an object when an input is newer than it. After a checkout and a fresh venv every input is newer than
       # the restored objects, so give the inputs an old timestamp (the restored objects keep theirs), then show with
       # `ninja -d explain` what, if anything, it would still rebuild.
       - name: Make the restored objects count as up to date
-        if: steps.objcache.outputs.cache-hit == 'true'
+        if: steps.restore.outputs.cache-hit == 'true'
         run: |
           $old = [datetime]'2020-01-01'
           foreach ($d in 'exllamav3\exllamav3_ext', '.venv-win\Lib\site-packages\torch\include', '.venv-win\Lib\site-packages\_rocm_sdk_devel') {
@@ -83,7 +142,13 @@ jobs:
           $global:LASTEXITCODE = 0      # diagnostic only; the build below decides
 
       - name: Build the wheel
-        run: uv run --no-project python scripts/windows/kyojin_win.py build --ci --wheel
+        run: |
+          $t = Get-Date
+          uv run --no-project python scripts/windows/kyojin_win.py build --ci --wheel
+          $code = $LASTEXITCODE
+          $min = [math]::Round(((Get-Date) - $t).TotalMinutes, 1)
+          "- build step: $min min (cache hit: ${{ steps.restore.outputs.cache-hit == 'true' }})" >> $env:GITHUB_STEP_SUMMARY
+          exit $code
 
       - name: Wheel contents
         run: |
@@ -96,6 +161,19 @@ jobs:
           name: windows-rocm-wheel
           path: dist/*.whl
           if-no-files-found: error
+
+      # Only after a green build, and only outside pull requests; a key that already exists is left as it is (caches are immutable)
+      - name: Save the build tree
+        if: success() && steps.cache.outputs.save == 'true' && steps.restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build
+            exllamav3/exllamav3_ext/**/*.hip
+            exllamav3/exllamav3_ext/**/*_hip.*
+            exllamav3/exllamav3_ext/**/hip_*.*
+            !exllamav3/exllamav3_ext/hip/hip_mma.cuh
+          key: ${{ steps.cache.outputs.key }}
 
       - name: Upload the run logs
         if: always()

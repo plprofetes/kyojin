@@ -40,7 +40,7 @@ import urllib.request
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-VENV = Path(os.environ.get("KYOJIN_VENV") or REPO / ".venv-win")   # KYOJIN_VENV: put the venv on another drive (CI runners)
+VENV = REPO / ".venv-win"
 LOG_ROOT = REPO / "logs" / "windows"
 
 # --- pins: one place. Verified on the AMD index from a Linux box (wheel METADATA read over HTTP range requests):

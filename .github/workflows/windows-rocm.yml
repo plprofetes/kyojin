@@ -21,10 +21,9 @@ jobs:
       run:
         shell: pwsh
     env:
-      # The checkout lives on D: (about 14 GB free on a hosted runner); the ROCm SDK expands to about 12 GB, so the venv and
-      # uv's cache go to C:, on the same drive so uv can hardlink instead of copying
-      KYOJIN_VENV: C:\kyojin-venv
-      UV_CACHE_DIR: C:\uv-cache
+      # uv's cache on the same drive as the checkout and the venv (D:, about 220 GB free on windows-2022), so uv hardlinks
+      # the wheels instead of copying them
+      UV_CACHE_DIR: D:\uv-cache
       PYTHONUTF8: "1"
     steps:
       - name: Checkout
@@ -35,7 +34,7 @@ jobs:
           Get-CimInstance Win32_Processor | Select-Object Name, NumberOfLogicalProcessors | Format-List
           Get-CimInstance Win32_OperatingSystem | Select-Object @{n='TotalGB';e={[math]::Round($_.TotalVisibleMemorySize/1MB,1)}}, @{n='FreeGB';e={[math]::Round($_.FreePhysicalMemory/1MB,1)}} | Format-List
           Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{n='UsedGB';e={[math]::Round($_.Used/1GB,1)}}, @{n='FreeGB';e={[math]::Round($_.Free/1GB,1)}} | Format-Table
-          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -all -products * -property installationPath, installationVersion
+          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -all -products * -format json
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -52,7 +51,7 @@ jobs:
       - name: Wheel contents
         run: |
           Get-ChildItem dist | Select-Object Name, @{n='MB';e={[math]::Round($_.Length/1MB,1)}}
-          & "$env:KYOJIN_VENV\Scripts\python.exe" -m zipfile -l (Get-ChildItem dist\*.whl | Select-Object -First 1).FullName
+          & .venv-win\Scripts\python.exe -m zipfile -l (Get-ChildItem dist\*.whl | Select-Object -First 1).FullName
 
       - name: Upload the wheel
         uses: actions/upload-artifact@v4

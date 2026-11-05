@@ -57,7 +57,14 @@ jobs:
         id: objcache
         uses: actions/cache@v4
         with:
-          path: build
+          # the build tree, plus the files torch's hipify writes into the source tree (the same patterns .gitignore lists);
+          # the objects were compiled from them, so they must come back with the objects
+          path: |
+            build
+            exllamav3/exllamav3_ext/**/*.hip
+            exllamav3/exllamav3_ext/**/*_hip.*
+            exllamav3/exllamav3_ext/**/hip_*.*
+            !exllamav3/exllamav3_ext/hip/hip_mma.cuh
           key: winrocm-build-${{ steps.meta.outputs.image }}-${{ hashFiles('exllamav3/exllamav3_ext/**', 'setup.py', 'pyproject.toml', 'requirements.txt', 'scripts/windows/constraints-win.txt', 'scripts/windows/kyojin_win.py', '.github/workflows/windows-rocm.yml') }}
 
       # ninja rebuilds an object when an input is newer than it. After a checkout and a fresh venv every input is newer than
@@ -73,6 +80,7 @@ jobs:
           $nj = Get-ChildItem build -Recurse -Filter build.ninja | Select-Object -First 1
           "build.ninja: $($nj.FullName)"
           & .venv-win\Scripts\ninja.exe -C $nj.DirectoryName -n -d explain | Select-Object -First 25
+          $global:LASTEXITCODE = 0      # diagnostic only; the build below decides
 
       - name: Build the wheel
         run: uv run --no-project python scripts/windows/kyojin_win.py build --ci --wheel

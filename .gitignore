@@ -35,5 +35,6 @@ tools/ds41/_ref/
 tools/ds41/_scratch/
 .check_logs/
 
-# Windows venv created by scripts/windows/kyojin_win.py
+# Windows venv and the compiled extension, both created by scripts/windows/kyojin_win.py
 .venv-win/
+exllamav3_ext*.pyd

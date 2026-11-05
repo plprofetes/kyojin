@@ -473,3 +473,9 @@ Running log, appended as the session goes. Machine: Windows 11, AMD Radeon 8060S
 - Cache experiment in progress (exact-match key, restore everywhere, save outside PRs, `cache=skip` / label `no-cache` / `CACHE_EPOCH` to skip or bust, weekly clean build). Not proven until a hit run shows ninja skipping the compile.
 - Separately: `build.yml` `windows_smoke` (CUDA) fails on `pr/windows-core` in `fq_gemv_kq.cu` (torch header, `std` ambiguous); the file is older than the PRs. A control run on plain upstream would confirm it is upstream's problem **[?]**.
 - Docs only; the workflow and driver changes are on the `ci/windows-rocm` branch and not in any pull request.
+
+## 2026-11-05 (later): S6-01 build cache works
+
+- Windows ROCm wheel workflow with an exact-match build cache: miss 33.5 min, hit **18 s** (`ninja: no work to do`), same wheel, both green **[V]**. The key hashes only the extension sources, `setup.py`, the pins read from the driver, the runner image version and `CACHE_EPOCH`; PRs restore the cache saved from `main`, only non-PR runs save; `cache=skip`, the `no-cache` label, the Monday clean build and `CACHE_EPOCH` skip or bust it. Details: [S6-01](sprints/s6-scale-and-speed/01-ci-windows-rocm-wheel.md).
+- The temporary push trigger for `ci/windows-rocm` is removed (commit on that branch). Still open: the CI wheel has not been imported on the Strix Halo machine; the `pull_request` and `schedule` triggers are untested until the PR exists.
+- Docs only here; the workflow lives on `ci/windows-rocm`, not in any pull request.

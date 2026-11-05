@@ -1,0 +1,119 @@
+"""Standalone check of Kyojin's vendored FLA Gated DeltaNet Triton kernels, without exllamav3_ext.
+
+Run from the repository root with the venv interpreter:
+    .venv-win/Scripts/python scripts/windows/fla_standalone_test.py [--T 100] [--qwen] [--reps 3]
+
+Provenance: drafted by a read-only review subagent from tests/test_gated_delta_rule.py and the vendored fla API, written
+without a GPU and never run before it was added here. No third-party code is copied (the kernels it calls are vendored in
+this repo).
+
+Imports exllamav3/vendor/fla as a top-level package `fla` (sys.path trick), so exllamav3/__init__.py and ext.py
+(which would start a JIT build of the C++ extension) are never imported. Compares
+fla.chunk_gated_delta_rule (Triton: l2norm, chunk_local_cumsum, kkt + solve_tril + WY, chunk h, chunk o)
+against a naive fp32 recurrence (same math as tests/test_gated_delta_rule.py::_torch_gated_delta_rule).
+
+Default shape is tiny (T=100: one full 64-row chunk plus a partial one; 2 k-heads, 4 v-heads, K=V=128 = the
+Qwen3.5 GDN head size) so the cold Triton compile is the main cost. --qwen uses the Qwen-like head counts of
+tests/test_fla_vendored_.py (H=16, HV=32) and T=4096 (one prefill chunk) for a timing that matters for TDR.
+Exit code 0 = within tolerance, 1 = mismatch, 2 = crash. Prints one SUMMARY line at the end for pasting.
+"""
+import argparse, os, sys, time, traceback
+
+os.environ.setdefault("EXL3_GDN_FUSE", "0")   # keep the hand-written HIP chunk kernel (needs hip_lib) out of this test
+import torch                                   # TheRock ROCm wheels: torch must be imported before triton
+# repository root: the current directory if it holds exllamav3/vendor/fla, else this file's directory
+HERE = os.getcwd() if os.path.isdir(os.path.join(os.getcwd(), "exllamav3", "vendor", "fla")) else os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "exllamav3", "vendor"))
+
+
+def naive_gdn(q, k, v, g, beta, scale, h0):
+    """q, k [B,T,H,K] (already l2-normalised), v [B,T,HV,V], g [B,T,HV] natural-log decay, beta [B,T,HV].
+    Returns o [B,T,HV,V] fp32 and the final state [B,HV,K,V] fp32."""
+    B, T, H, K = q.shape
+    HV, V = v.shape[2], v.shape[3]
+    grp = HV // H
+    qf = q.float().repeat_interleave(grp, dim=2)      # [B,T,HV,K]: v-head hv uses k-head hv // grp
+    kf = k.float().repeat_interleave(grp, dim=2)
+    vf, gf, bf = v.float(), g.float().exp(), beta.float()
+    S = h0.clone() if h0 is not None else torch.zeros(B, HV, K, V, device=q.device, dtype=torch.float32)
+    o = torch.empty(B, T, HV, V, device=q.device, dtype=torch.float32)
+    for t in range(T):
+        S = S * gf[:, t, :, None, None]                                   # decay
+        kv = torch.einsum("bhk,bhkv->bhv", kf[:, t], S)                    # S^T k
+        u = (vf[:, t] - kv) * bf[:, t, :, None]                            # delta, gated by beta
+        S = S + kf[:, t, :, :, None] * u[:, :, None, :]                    # rank-1 update
+        o[:, t] = torch.einsum("bhk,bhkv->bhv", qf[:, t] * scale, S)
+    return o, S
+
+
+def l2n(x, eps=1e-6):
+    x = x.float()
+    return (x * torch.rsqrt((x * x).sum(-1, keepdim=True) + eps)).to(torch.bfloat16)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--T", type=int, default=100)
+    ap.add_argument("--H", type=int, default=2)
+    ap.add_argument("--HV", type=int, default=4)
+    ap.add_argument("--K", type=int, default=128)
+    ap.add_argument("--qwen", action="store_true", help="H=16 HV=32 T=4096 (reference loop takes a while)")
+    ap.add_argument("--reps", type=int, default=3)
+    ap.add_argument("--no-ref", action="store_true", help="timing only, skip the naive reference")
+    a = ap.parse_args()
+    if a.qwen:
+        a.H, a.HV, a.T = 16, 32, 4096
+
+    import triton
+    print(f"torch {torch.__version__} hip {torch.version.hip} | triton {triton.__version__} | python {sys.version.split()[0]}")
+    print(f"device {torch.cuda.get_device_name(0)} arch {torch.cuda.get_device_properties(0).gcnArchName}")
+    print(f"TRITON_CACHE_DIR={os.environ.get('TRITON_CACHE_DIR', '(default ~/.triton/cache)')} CC={os.environ.get('CC', '')}")
+    t0 = time.perf_counter()
+    import fla                                     # exllamav3/vendor/fla
+    print(f"import fla: {time.perf_counter() - t0:.2f}s from {os.path.dirname(fla.__file__)} IS_AMD={fla.utils.IS_AMD}")
+
+    dev = torch.device("cuda:0")
+    torch.manual_seed(0)
+    B, T, H, HV, K = 1, a.T, a.H, a.HV, a.K
+    q = torch.randn(B, T, H, K, device=dev, dtype=torch.bfloat16)
+    k = torch.randn(B, T, H, K, device=dev, dtype=torch.bfloat16)
+    v = torch.randn(B, T, HV, K, device=dev, dtype=torch.bfloat16)
+    g = torch.nn.functional.logsigmoid(torch.randn(B, T, HV, device=dev, dtype=torch.float32)) * 2
+    beta = torch.rand(B, T, HV, device=dev, dtype=torch.bfloat16)
+    h0 = torch.randn(B, HV, K, K, device=dev, dtype=torch.float32) * 0.1
+    scale = K ** -0.5
+
+    times = []
+    for i in range(max(1, a.reps)):
+        torch.cuda.synchronize(); t0 = time.perf_counter()
+        o, s = fla.chunk_gated_delta_rule(q, k, v, g=g, beta=beta, scale=scale, initial_state=h0,
+                                          output_final_state=True, use_qk_l2norm_in_kernel=True)
+        torch.cuda.synchronize(); times.append(time.perf_counter() - t0)
+        print(f"run {i}: {times[-1] * 1e3:.1f} ms" + ("  (includes Triton compile/autotune)" if i == 0 else ""))
+    ok = True
+    if not a.no_ref:
+        t0 = time.perf_counter()
+        ro, rs = naive_gdn(l2n(q), l2n(k), v, g, beta, scale, h0)
+        torch.cuda.synchronize()
+        eo = (o.float() - ro).abs().max().item(); mo = ro.abs().max().item()
+        es = (s.float() - rs).abs().max().item(); ms = rs.abs().max().item()
+        # same tolerance as tests/test_gated_delta_rule.py (assert_close rtol = atol = 5e-2): the chunk kernels keep
+        # bf16 intermediates (w, u, v_new), the reference is fp32 throughout
+        ok = bool(torch.isclose(o.float(), ro, rtol=5e-2, atol=5e-2).all() and torch.isclose(s.float(), rs, rtol=5e-2, atol=5e-2).all())
+        print(f"reference {time.perf_counter() - t0:.2f}s | o: max|diff| {eo:.3e} (max|ref| {mo:.3e}) | "
+              f"state: max|diff| {es:.3e} (max|ref| {ms:.3e}) | {'PASS' if ok else 'FAIL'}")
+        print(f"SUMMARY fla_gdn T={T} H={H} HV={HV} K={K} cold={times[0]:.2f}s warm={min(times[1:] or times) * 1e3:.1f}ms "
+              f"o_err={eo:.2e} state_err={es:.2e} {'PASS' if ok else 'FAIL'} triton={triton.__version__} torch={torch.__version__}")
+    else:
+        print(f"SUMMARY fla_gdn T={T} H={H} HV={HV} K={K} cold={times[0]:.2f}s warm={min(times[1:] or times) * 1e3:.1f}ms "
+              f"no-ref triton={triton.__version__} torch={torch.__version__}")
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception:
+        traceback.print_exc()
+        print("SUMMARY fla_gdn CRASH (see traceback above)")
+        sys.exit(2)

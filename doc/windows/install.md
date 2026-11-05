@@ -8,11 +8,12 @@ Verified on one machine (ASUS ProArt PX13, Ryzen AI Max+ 395, 128 GB, Adrenalin 
 
 | Works **[V]** | Not verified |
 |---|---|
-| Build of `exllamav3_ext` (MSVC host, clang-cl, hipcc), about 12 min | MoE packs (Qwen3.5-35B-A3B, Flash-Next, GLM, MiMo, DeepSeek) |
+| Build of `exllamav3_ext` (MSVC host, clang-cl, hipcc), about 12 min | MoE packs other than the two listed as working: GLM, MiMo, DeepSeek |
 | Qwen3.5-9B and Qwen3.8-27B (EXL3 4.00 bpw) through `tools/qwen/serve.py`, 27B with MTP, identical text at temperature 0 | `tools/glm/serve.py`, `tools/mimo/serve.py` |
-| Qwen3.5-35B-A3B (MoE, `mcg` codebook, 4.00 bpw): about 2700 tok/s prefill, 47 to 55 tok/s decode | Flash-Next, GLM, MiMo and DeepSeek MoE packs |
+| Qwen3.5-35B-A3B (MoE, `mcg` codebook, 4.00 bpw): about 2700 tok/s prefill, 47 to 55 tok/s decode | Flash-Next above 2 bpw (the 3.05 and 4.05 bpw packs are estimated to fit the GPU, not run) |
+| Qwen3.8-Flash-Next 2.05 bpw (`turboderp/Qwen3.8-Flash-Next-exl3`, branch `2.05bpw_h4_ng4`, 58 GiB on disk, `mul1`; the 24 GiB n-gram table is streamed from disk): loads in 41 s (173 s to ready on a cold cache), about 1100 tok/s prefill and 25 to 26 tok/s plain decode at 2K tokens, 42 GB of GPU memory, no TDR | n-gram table in RAM (`--ngram-ram`) and lowering the GPU-dedicated memory |
 | JIT HIP kernels `gdn_hf` and `ple` (bitwise equal to the fallback on one prompt) | JIT kernels `gr_mix`, `qsa_pf` |
-| A 13-request soak and a distinct-prompt soak with no TDR | Packs larger than about 85 GiB (see GPU memory below) |
+| A 13-request soak and a distinct-prompt soak with no TDR | Packs whose weights, not counting an n-gram table, exceed about 85 GiB (see GPU memory below) |
 |  | Old public packs without a codebook entry (for example `turboderp/Qwen3-30B-A3B-exl3`): they decode at about 10 tok/s here, probably because the fast MoE decode kernels need a `mul1` or `mcg` pack **[?]** |
 
 Linux-only server features (swap read-back, page-cache control) degrade quietly. Single runs, not benchmarks: Qwen3.5-9B decodes 33 tok/s, Qwen3.8-27B 12.6 tok/s plain and 14.4 tok/s with MTP on prose.
@@ -72,7 +73,8 @@ Add `"stream":true` and `curl.exe -N` for streaming. `"speculative":false` turns
 
 ## Limits to know
 
-- GPU memory: torch reports 107.87 GiB; on an idle GPU, allocations in 256 MiB, 1 GiB and 4 GiB chunks ran out at about 100 to 101.75 GiB, and a single 88 GiB block worked while 96 GiB failed **[V]**. Plan for about 100 GiB in total, less if another program holds GPU memory. A pack of about 85 GiB plus cache is therefore not ruled out; the 95 GB and 100 GB packs are.
+- GPU memory: torch reports 107.87 GiB; on an idle GPU, allocations in 256 MiB, 1 GiB and 4 GiB chunks ran out at about 100 to 101.75 GiB, and a single 88 GiB block worked while 96 GiB failed **[V]**. Plan for about 100 GiB in total, less if another program holds GPU memory. Count the weights, not the file size: Flash-Next's n-gram embedding table (24 to 48 GiB, depending on the pack) is read from disk and stays off the GPU, so the 58 GiB 2.05 bpw pack used 42 GB of GPU memory **[V]**. The 3.05 and 4.05 bpw packs are estimated to need about 57 and 72 GB **[I, not run]**.
+- Task Manager on the test machine shows 95.8 GB of dedicated GPU memory and a 15.8 GB shared limit (half of the RAM Windows sees). With the 2.05 bpw Flash-Next pack serving and other programs running, the server used about 9 GB of host memory (12 GB committed) and 6 to 10 GB of the 31.6 GB were free **[V]**; streaming a larger n-gram table may need more.
 - Windows sees only part of the RAM on the test machine (31.6 GB of 128 GB) **[V]**.
 - Use `127.0.0.1`, not `localhost`, in clients. On Windows `localhost` resolves to the IPv6 address `::1` first, the server listens on IPv4 only, and Windows takes about 2 s to refuse a connection to a closed local port, so a client such as Python `urllib` or `requests` waits that long before every new connection. On the test machine this made `tools/bench.py` read 860 tok/s prefill instead of 2862 for the same prompt **[V]**; `curl.exe` is not affected. `tools/bench.py` uses `127.0.0.1` by default on Windows.
 - Decode speed depends on what else you do with the machine. On the test machine, Qwen3.5-35B-A3B (MoE, `mcg` codebook) decoded at about 55 tok/s when left alone and between 30 and 47 tok/s while the desktop or a browser was in use; prefill was unaffected. Measure hands-off, and quote the undisturbed figure. The mechanism (the desktop sharing the GPU and memory with compute) is a guess **[?]**.

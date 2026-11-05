@@ -61,9 +61,9 @@ uv run --no-project python scripts/windows/kyojin_win.py serve --model C:\models
 Ask it something. PowerShell strips quotes inside `-d '...'`, so put the JSON in a file, quote `@file`, and use the served model id (`/v1/models`):
 
 ```powershell
-curl.exe -s localhost:8000/v1/models
+curl.exe -s 127.0.0.1:8000/v1/models
 '{"model":"Qwen3.8-Flash-Yamz","messages":[{"role":"user","content":"What is 2+2?"}],"max_tokens":32,"chat_template_kwargs":{"enable_thinking":false}}' | Set-Content -Encoding ascii req.json
-curl.exe -s localhost:8000/v1/chat/completions -H "Content-Type: application/json" -d "@req.json"
+curl.exe -s 127.0.0.1:8000/v1/chat/completions -H "Content-Type: application/json" -d "@req.json"
 ```
 
 Add `"stream":true` and `curl.exe -N` for streaming. `"speculative":false` turns the MTP drafter off for one request.
@@ -72,6 +72,7 @@ Add `"stream":true` and `curl.exe -N` for streaming. `"speculative":false` turns
 
 - GPU memory: torch reports 107.87 GiB; on an idle GPU, allocations in 256 MiB, 1 GiB and 4 GiB chunks ran out at about 100 to 101.75 GiB, and a single 88 GiB block worked while 96 GiB failed **[V]**. Plan for about 100 GiB in total, less if another program holds GPU memory. A pack of about 85 GiB plus cache is therefore not ruled out; the 95 GB and 100 GB packs are.
 - Windows sees only part of the RAM on the test machine (31.6 GB of 128 GB) **[V]**.
+- Use `127.0.0.1`, not `localhost`, in clients. On Windows `localhost` resolves to the IPv6 address `::1` first, the server listens on IPv4 only, and Windows takes about 2 s to refuse a connection to a closed local port, so a client such as Python `urllib` or `requests` waits that long before every new connection. On the test machine this made `tools/bench.py` read 860 tok/s prefill instead of 2862 for the same prompt **[V]**; `curl.exe` is not affected. `tools/bench.py` uses `127.0.0.1` by default on Windows.
 - Decode speed depends on what else you do with the machine. On the test machine, Qwen3.5-35B-A3B (MoE, `mcg` codebook) decoded at about 55 tok/s when left alone and between 30 and 47 tok/s while the desktop or a browser was in use; prefill was unaffected. Measure hands-off, and quote the undisturbed figure. The mechanism (the desktop sharing the GPU and memory with compute) is a guess **[?]**.
 
 ## Environment and caches

@@ -1692,7 +1692,22 @@ def create_app(engine: Any, model_id: str, template: str, defaults: dict[str, An
     running = 0
     salt_state: dict[str, Any] = {"current": None}   # cache_salt namespace of the prompt cache (None = requests without a salt)
     admit_lock = asyncio.Lock()
-    app = web.Application(client_max_size=64 * 1024**2, middlewares=[startup_health.json_errors_middleware()])
+    middlewares = [startup_health.json_errors_middleware()]
+    api_key = os.environ.get("KYOJIN_API_KEY", "")
+    if api_key:
+        # Opt-in bearer auth (set KYOJIN_API_KEY): every route but GET /health needs `Authorization: Bearer <key>`.
+        import hmac
+
+        @web.middleware
+        async def bearer_auth(request: web.Request, handler: Any) -> web.StreamResponse:
+            if request.path != "/health":
+                got = request.headers.get("Authorization", "")
+                if not hmac.compare_digest(got.encode(), f"Bearer {api_key}".encode()):
+                    return web.json_response({"error": {"message": "missing or invalid bearer token", "type": "invalid_request_error", "code": 401}},
+                                             status=401, headers={"WWW-Authenticate": "Bearer"})
+            return await handler(request)
+        middlewares.insert(0, bearer_auth)
+    app = web.Application(client_max_size=64 * 1024**2, middlewares=middlewares)
     app.update(engine=engine, model_id=model_id, template=template, defaults=defaults,
                metrics=Metrics(server="qwen", model=model_id, sessions=sessions, context=getattr(engine, "ctx", None)))
     # SSE keep-alive: off unless KYOJIN_SSE_PING_S names an interval (see tools/strix_halo/serve_ping.py).

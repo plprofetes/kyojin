@@ -79,6 +79,22 @@ The working set is pinned in two places: the constants at the top of `scripts/wi
 
 If a pinned nightly wheel disappears from AMD's index, `doctor` (amd_index) says so; the stable-index fallback is in [deferred.md](deferred.md).
 
+## Text encoding on the target (Polish locale)
+
+The target runs with the ANSI code page **1250** and the OEM code page **852** (culture `pl-PL`); no UTF-8 override is set **[V, registry and `python -c "import locale"`]**. It is a property of the machine, not of one session, so every new shell, script and agent session meets it. What goes wrong, and the rule for each:
+
+| Symptom | Cause | Rule |
+|---|---|---|
+| `UnicodeEncodeError: 'charmap' codec can't encode character '✅'` (or an arrow, `≥`, an emoji) | Python writes redirected or piped stdout/stderr (`> file`, `\| tee`, a tool's capture) in cp1250. Model answers and our own reports contain characters outside it. Measured: redirected `sys.stdout.encoding` is `cp1250` **[V]**. | Run with UTF-8 mode: `python -X utf8 ...` or `PYTHONUTF8=1`. For files you write, pass `encoding="utf-8"`. |
+| The fix "did nothing" with `PYTHONUTF8=1` or `PYTHONIOENCODING=utf-8` | `python -I` (isolated mode) **ignores every `PYTHON*` variable** **[V: `-I` printed utf8_mode 0 and cp1250 with the variable set]**. | With `-I` use the flag: `python -X utf8 -I script.py` gives utf8_mode 1 and utf-8 **[V]**. Or drop `-I`. |
+| `read_text()` / `open()` mis-decodes or raises on a UTF-8 file | Without `encoding=`, Python uses cp1250 | `PYTHONUTF8=1` covers every call without touching code; `kyojin_win.py serve` and `build`, `scripts/windows/serve-lan.ps1` and `tools/sweep.py` already set it |
+| `UnicodeDecodeError: 'utf-8' codec can't decode byte 0xbe` from a `_readerthread` above the `bench.py` table | In UTF-8 mode, `bench.py` decodes its helper commands (`subprocess.run(..., text=True)`) as UTF-8, but a Windows helper prints cp852 or cp1250 bytes **[I: the exact helper is not identified]**. Harmless: the table is still correct. | Fixed on `pr/windows-core` (commit `5451806`: `encoding="utf-8", errors="replace"`), not on this branch. Any new `subprocess` call: give `encoding` and `errors="replace"` explicitly |
+| `chcp` shows 65001 in one terminal and 852 in another | The console code page is per console and only affects what the console displays; it does not change what Python uses for files and pipes | Do not rely on `chcp`; set the Python side as above |
+
+For a script that must be safe either way, start it with `sys.stdout.reconfigure(encoding="utf-8", errors="replace")` instead of relying on the caller.
+
+Not changed by this document (the operator's call, each has side effects): the Windows setting "Beta: Use Unicode UTF-8 for worldwide language support" (makes the ANSI page 65001 for the whole machine and can break old programs that expect cp1250), or a user-level `PYTHONUTF8=1` environment variable (fixes Python only, applies to every Python program including ones that decode with a legacy page on purpose).
+
 ## When something fails
 
 Every `kyojin_win.py` command writes `logs\windows\<timestamp>-<command>\`. Send that whole folder (`FAILURE.md` first, then `run.log` and the numbered step logs). Secrets in the environment snapshot are redacted. Do not paste screenshots of the console only: the folder has the full output.

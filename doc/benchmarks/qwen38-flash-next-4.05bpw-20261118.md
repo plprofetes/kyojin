@@ -74,3 +74,36 @@ Start-up 67 s (warm page cache). Prompts are random slices of `doc/**/*.md` with
 - Context 40960 loaded with no memory trouble; no display driver reset (Event Viewer 4101) in the two hours around these runs **[V]**. Decode speed at long context was not measured.
 
 Raw output: `logs/bench-flashnext-4p05-mtp-run{1,2}.md`, `logs/longprompt-flashnext-4p05-off.txt`, server logs `logs/serve-flash-next-4p05-{mtp,off-ctx40k}.log` (gitignored).
+
+## Addendum 2: default drafting (`mix`), thinking, effort, budget, LAN runner (same day)
+
+Server: `scripts/windows/serve-flash-next.ps1` (new; bearer token, `0.0.0.0`, ctx 131072, `--draft-policy mix`, thinking default off, effort `medium`, serve.py's built-in chat template). Start-up 160 s; auth checked: no token and a wrong token give 401, the right one 200, `GET /health` 200 without a token, the LAN address answers **[V]**.
+
+**Correction to the sections above:** the plain (`off`) and `mtp` servers were started without `--no-thinking`, so thinking was on by default and the 256 benchmark tokens were mostly reasoning text. The figures stand for thinking-mode text; `mix` below was run both ways.
+
+`tools/bench.py` (through a scratch wrapper that adds the bearer header; `bench.py` has no auth option), corpus `doc/knobs.md`, two passes per setting, medians of 3:
+
+| | Thinking off, pass 1 / 2 | Thinking on, pass 1 / 2 |
+|---|---|---|
+| Decode, prose | 29.9 / 29.7 | 31.3 / 29.4 |
+| Decode, chat | 32.6 / 32.3 | 33.3 / 32.2 |
+| Decode, code | 41.2 / 41.1 | 39.6 / 37.7 |
+| Prefill, ~2680 tokens | 546.0 / 1094.4 | 1070.3 / 1027.0 |
+
+- **`mix` beats `off` (19.9) and `mtp` (17.8 to 33.3) on every prompt type** **[V]**: +50 % prose, +62 % chat, +90 to +107 % code against plain. The first pass after the start again showed half the prefill speed (546) in the thinking-off series **[V, cause unknown]**.
+
+Effort and thinking-budget probe (greedy off; temperature 1.0 / top-p 0.95 / top-k 20, seed 1, one request per cell, `mix`), completion tokens (reasoning characters):
+
+| Prompt | off | low | medium | xhigh | medium + budget 512 |
+|---|---|---|---|---|---|
+| math (train catch-up) | 624 (0) | 327 (314) | 539 (495) | 262 (575) | 539 (495) |
+| count letters | 229 (0) | 378 (615) | 371 (587) | 358 (1096) | 371 (587) |
+| code (fib mod, O(log n)) | 322 (0) | 873 (1449) | 927 (1667) | 938 (2405) | 798 (1328) |
+
+All 12 answers on the three easy prompts were correct (code checked by running it) **[V]**. Budget 2048 changed nothing on them (the reasoning was under it). The hard prompt (`n*n+n+41` composite for 1 <= n <= 100, true answer 14), `max_tokens` 12000: off, low, medium and xhigh each used all 12,000 tokens (286 to 360 s) with no answer; `thinking_budget` 256 and 1024 answered after 1,072 and 1,361 tokens and were wrong (4 and 36) **[V]**.
+
+- **Effort is a soft instruction**, not a limit: the reasoning length moved with it on the code prompt (1.0 : 1.15 : 1.66 characters, low : medium : xhigh) and not clearly on the others, from one seed each **[V that it is noisy, I that it is a prompt hint]**. **`thinking_budget` is a hard cap that works** (798 against 927 tokens at 512; a hard stop at 256) **[V]**, and a cap that is too small makes the answer wrong rather than short **[V]**.
+- Decode in the probe: 42 to 45 tok/s on short answers, 33 to 38 tok/s in the long reasoning runs **[V]**.
+- Not run: `presence_penalty` and the other penalties (the code does not read them; not probed here), a per-switch knob sweep, more than one seed, a larger set of hard prompts.
+
+Raw output: `logs/bench-flashnext-4p05-mix-think{off,on}-run{1,2}.md`, `logs/effort-probe-mix.{txt,json}`, `logs/effort-probe-hard-mix.{txt,json}`, server log `logs/serve-flash-next-runner-mix.log` (gitignored). Model card: [../model-cards/qwen38-flash-next-4.05bpw.md](../model-cards/qwen38-flash-next-4.05bpw.md).

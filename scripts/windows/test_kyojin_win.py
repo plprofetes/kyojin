@@ -213,6 +213,7 @@ class HelpfulErrors(unittest.TestCase):
         "openblas-oom": "OpenBLAS error: Memory allocation still failed after 10 retries, giving up.",
         "gpu-alloc-failed": "RuntimeError: CUDA error: HIPBLAS_STATUS_ALLOC_FAILED when calling `hipblasCreate(handle)`",
         "hip-oom": "torch.OutOfMemoryError: HIP out of memory. Tried to allocate 16.00 GiB",
+        "insufficient-vram-split": "RuntimeError: Insufficient VRAM in split for model and cache",
         "file-locked": "PermissionError: [WinError 32] The process cannot access the file because it is being used by another process",
         "no-ninja-fallback": "clang: error: no such file or directory: '/EHsc'",
         "cpu-target-feature": "error: always_inline function '_mm256_set1_ps' requires target feature 'avx', but would be inlined into function 'prepare_block_avx2'",

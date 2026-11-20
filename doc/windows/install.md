@@ -100,3 +100,9 @@ Not changed by this document (the operator's call, each has side effects): the W
 Every `kyojin_win.py` command writes `logs\windows\<timestamp>-<command>\`. Send that whole folder (`FAILURE.md` first, then `run.log` and the numbered step logs). Secrets in the environment snapshot are redacted. Do not paste screenshots of the console only: the folder has the full output.
 
 More: [journal.md](journal.md) (what happened, in order), [deferred.md](deferred.md) (what is not done), [assessment.md](assessment.md) (background and sources).
+
+## GPU memory mode (read before loading models above 55 GiB)
+
+- Fixed carve-out (for example 96 GB in Adrenalin/BIOS): models up to the carve-out size load; Windows keeps the rest of the RAM.
+- Dynamic/shared mode: device + pinned host memory is capped at about 61 GiB; loading a 64 GiB model fails with `RuntimeError: Insufficient VRAM in split for model and cache` (loader check, because `mem_get_info` reports 76.79 GiB with 2:1 accounting) or with error 719 / a hang. This is a Windows/AMD driver limit, not a Kyojin bug: [dynamic-gpu-memory-limitations.md](dynamic-gpu-memory-limitations.md).
+- Do not set `PAL_ALWAYS_RESIDENT=0` (GPU page faults).

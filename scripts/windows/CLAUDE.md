@@ -60,6 +60,7 @@ Scope: everything under `scripts/windows/` and `doc/windows/`, plus the small Wi
 | Task tracker | `scripts/windows/tasks.py` |
 | Standalone Triton/GDN kernel test (needs GPU, no extension build; added with user consent) | `scripts/windows/fla_standalone_test.py` |
 | Docs index, assessment, deferred items, journal | `doc/windows/README.md`, `assessment.md`, `deferred.md`, `journal.md` |
+| GPU memory probes (pure C++ HIP, DXGI/WDDM, torch checks); one process per test, wait about 15 s after a failure, always use a timeout | `scripts/windows/probes/` (see `doc/windows/dynamic-gpu-memory-limitations.md`) |
 | Sprints and tasks | `doc/windows/sprints/` |
 | Windows-gated build flags | `setup.py` (repo root) |
 | Run logs, venv | `logs/windows/`, `.venv-win/` (both gitignored) |

@@ -478,6 +478,10 @@ KNOWN: tuple[Known, ...] = (
           "The GPU could not allocate (hipBLAS handle/workspace)",
           "The handle allocation failed. Observed once on the target while torch reported 107.7 of 107.9 GiB GPU memory free and plain tensor allocation worked, so GPU memory exhaustion is NOT established; candidates: host RAM pressure (about 6 GB free), a hipBLAS/rocBLAS library problem, GPU contention with another process.",
           "Read the probe's `elementwise_ms` and `matmul` per BLAS backend in report.json; retry with the other workload stopped; if elementwise works and every backend fails, check rocblas/hipblaslt DLLs next to torch."),
+    Known("insufficient-vram-split", r"Insufficient VRAM in split for model and cache",
+          "Model load stopped: the loader's GPU memory check refused the next layer",
+          "On Strix Halo in dynamic/shared GPU memory mode the HIP runtime reports 76.79 GiB total and charges 2 GiB per 1 GiB allocated, and the OS caps device + pinned memory at about 61 GiB (error 719 or a hang beyond it). Seen 2026-11-20 at 37.9 GiB with Flash-Next 4.05bpw (run folder logs/windows/20261120-092800-serve).",
+          "Check the GPU memory mode: models above about 55 GiB need a fixed carve-out in Adrenalin/BIOS (96 GB measured good) or a smaller model. Do not set PAL_ALWAYS_RESIDENT=0. Details: doc/windows/dynamic-gpu-memory-limitations.md."),
     Known("hip-oom", r"HIP out of memory|OutOfMemoryError",
           "GPU allocation failed",
           "The request exceeds the GPU memory actually available. On Windows torch.cuda.mem_get_info() over-reports free memory (seen: 107.55 GiB 'free' while 1 GiB failed because another process held the VRAM).",
@@ -563,7 +567,8 @@ KNOWN: tuple[Known, ...] = (
 # Signatures seen on the real target machine (journal 2026-10-30/31); every other entry above is still a hypothesis and is
 # reported as such. Move an id here only with a log line or run folder that matched it.
 OBSERVED = frozenset({"winsock-provider", "no-ninja-fallback", "cpu-target-feature", "compiler-rt-builtin", "tokenizers-rc",
-                      "jit-hipcc-missing", "register-at-fork", "dll-missing", "openblas-oom", "gpu-alloc-failed"})
+                      "jit-hipcc-missing", "register-at-fork", "dll-missing", "openblas-oom", "gpu-alloc-failed",
+                      "insufficient-vram-split"})
 
 
 def known_tag(k: Known) -> str:

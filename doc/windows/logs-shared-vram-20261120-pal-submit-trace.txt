@@ -1,0 +1,11 @@
+:1:                         :0   : 92669292991 us: [pid:24176 tid: 0x4cd98] Couldn't register debug state from the loader!
+:1:                         :0   : 92669417305 us: [pid:24176 tid: 0x4cd98] warning: argument unused during compilation: '-O3' [-Wunused-command-line-argument]
+warning: argument unused during compilation: '-cl-kernel-arg-info' [-Wunused-command-line-argument]
+warning: argument unused during compilation: '-Xclang -no-disable-free' [-Wunused-command-line-argument]
+
+:1:                         :0   : 92669498939 us: [pid:24176 tid: 0x4cd98] KMD failed to setup the trap handler
+:1:                         :0   : 92682074193 us: [pid:24176 tid: 0xd8825] PAL failed to submit CMD! result:-5
+:1:                         :0   : 92682074318 us: [pid:24176 tid: 0xd8825] PAL failed to finalize a command buffer! result: -28
+:1:                         :0   : 92682076572 us: [pid:24176 tid: 0xd8825] PAL failed to finalize a command buffer! result: -28
+:1:                         :0   : 92682076579 us: [pid:24176 tid: 0xd8825] PAL failed to finalize a command buffer! result: -28
+malloc: memset/sync error 0/719 after 49 GiB ok

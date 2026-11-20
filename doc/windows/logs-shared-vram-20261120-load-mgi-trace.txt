@@ -1,0 +1,128 @@
+[kyojin] HIP kernel compiler: C:\Projects\kyojin\.venv-win\Lib\site-packages\_rocm_sdk_devel\bin\hipcc.exe (from rocm-sdk package): HIP version: 7.16.26332-d134b7823f AMD clang version 23.0.0git (https://github.com/ROCm/llvm-project.git 0bace1908348b840e6aa1b4b6e12151dae208158) Target: x86_6
+qserve: starting, model=C:\models\flash-next-4p05 ctx=8192 sessions=1 draft_policy=off defaults={'temperature': 1.0, 'top_p': 0.95, 'top_k': 20, 'min_p': 0.0, 'enable_thinking': False, 'reasoning_effort': 'medium'}
+qserve: hc mixer: group scales, plain rounding (no hc_gs_sidecar.safetensors in the model directory)
+qserve: draft head: full head (no draft2s.st in the model directory)
+qserve: loading target model ...
+[mgi] free 76.17 total 76.79 alloc 0.15 reserved 0.17
+[loaddiag]   1 hc_expand                                        alloc   0.152G reserved   0.174G peak   0.172G
+C:\Projects\kyojin\.venv-win\Lib\site-packages\triton\knobs.py:524: UserWarning: TRITON_DEFAULT_FP_FUSION is unset: defaulting to FP fusion ENABLED for backward compatibility in Triton 3.9. The default will change to DISABLED in Triton 3.10; set TRITON_DEFAULT_FP_FUSION=1 to keep fusion enabled or =0 to adopt the new default early and silence this warning.
+  warn_once(FP_FUSION_DEFAULT_WARNING)
+[mgi] free 71.67 total 76.79 alloc 1.56 reserved 2.04
+[loaddiag]   2 model.language_model.layers.0                    alloc   1.564G reserved   2.043G peak   1.853G
+[ngram] placement: disk (default: disk streaming); table 36.4 GiB, host MemAvailable ? GiB
+[ngram] table mode trellis_disk: 320001536 rows, host MemAvailable ? GiB at load (RAM mode is opt-in, EXL3_NGRAM_STREAM=0; disk mode = every prefill chunk reads its rows from the file, a busy disk or a cold page cache stalls it)
+[mgi] free 71.06 total 76.79 alloc 1.59 reserved 2.18
+[loaddiag]   3 model.language_model.layers.1.ple                alloc   1.594G reserved   2.184G peak   2.024G
+[mgi] free 68.23 total 76.79 alloc 2.92 reserved 3.60
+[loaddiag]   4 model.language_model.layers.1                    alloc   2.922G reserved   3.602G peak   3.211G
+[mgi] free 65.65 total 76.79 alloc 4.23 reserved 4.89
+[loaddiag]   5 model.language_model.layers.2                    alloc   4.230G reserved   4.893G peak   4.519G
+[mgi] free 63.06 total 76.79 alloc 5.62 reserved 6.18
+[loaddiag]   6 model.language_model.layers.3                    alloc   5.620G reserved   6.184G peak   5.909G
+[mgi] free 60.48 total 76.79 alloc 6.93 reserved 7.47
+[loaddiag]   7 model.language_model.layers.4                    alloc   6.929G reserved   7.475G peak   7.218G
+[mgi] free 57.91 total 76.79 alloc 8.24 reserved 8.77
+[loaddiag]   8 model.language_model.layers.5                    alloc   8.237G reserved   8.768G peak   8.526G
+[mgi] free 55.23 total 76.79 alloc 9.55 reserved 10.11
+[loaddiag]   9 model.language_model.layers.6                    alloc   9.546G reserved  10.107G peak   9.835G
+[mgi] free 52.79 total 76.79 alloc 10.75 reserved 11.33
+[loaddiag]  10 model.language_model.layers.7                    alloc  10.747G reserved  11.332G peak  11.036G
+[mgi] free 50.21 total 76.79 alloc 12.06 reserved 12.62
+[loaddiag]  11 model.language_model.layers.8                    alloc  12.056G reserved  12.623G peak  12.345G
+[mgi] free 47.63 total 76.79 alloc 13.36 reserved 13.91
+[loaddiag]  12 model.language_model.layers.9                    alloc  13.363G reserved  13.914G peak  13.652G
+[mgi] free 44.99 total 76.79 alloc 14.67 reserved 15.24
+[loaddiag]  13 model.language_model.layers.10                   alloc  14.671G reserved  15.236G peak  14.960G
+[mgi] free 42.41 total 76.79 alloc 16.00 reserved 16.53
+[loaddiag]  14 model.language_model.layers.11                   alloc  15.997G reserved  16.525G peak  16.286G
+[mgi] free 40.03 total 76.79 alloc 17.18 reserved 17.72
+[loaddiag]  15 model.language_model.layers.12                   alloc  17.180G reserved  17.723G peak  17.469G
+[mgi] free 37.39 total 76.79 alloc 18.49 reserved 19.04
+[loaddiag]  16 model.language_model.layers.13                   alloc  18.489G reserved  19.043G peak  18.778G
+[mgi] free 34.75 total 76.79 alloc 19.80 reserved 20.36
+[loaddiag]  17 model.language_model.layers.14                   alloc  19.797G reserved  20.363G peak  20.086G
+[mgi] free 32.18 total 76.79 alloc 21.12 reserved 21.65
+[loaddiag]  18 model.language_model.layers.15                   alloc  21.124G reserved  21.654G peak  21.413G
+[mgi] free 29.60 total 76.79 alloc 22.43 reserved 22.95
+[loaddiag]  19 model.language_model.layers.16                   alloc  22.432G reserved  22.945G peak  22.721G
+[mgi] free 26.91 total 76.79 alloc 23.74 reserved 24.29
+[loaddiag]  20 model.language_model.layers.17                   alloc  23.740G reserved  24.293G peak  24.029G
+[mgi] free 24.27 total 76.79 alloc 25.05 reserved 25.61
+[loaddiag]  21 model.language_model.layers.18                   alloc  25.048G reserved  25.613G peak  25.337G
+[mgi] free 21.95 total 76.79 alloc 26.25 reserved 26.78
+[loaddiag]  22 model.language_model.layers.19                   alloc  26.249G reserved  26.779G peak  26.538G
+[mgi] free 19.26 total 76.79 alloc 27.56 reserved 28.12
+[loaddiag]  23 model.language_model.layers.20                   alloc  27.557G reserved  28.125G peak  27.846G
+[mgi] free 16.62 total 76.79 alloc 28.86 reserved 29.45
+[loaddiag]  24 model.language_model.layers.21                   alloc  28.864G reserved  29.445G peak  29.153G
+[mgi] free 14.04 total 76.79 alloc 30.17 reserved 30.74
+[loaddiag]  25 model.language_model.layers.22                   alloc  30.172G reserved  30.738G peak  30.461G
+[mgi] free 11.35 total 76.79 alloc 31.50 reserved 32.09
+[loaddiag]  26 model.language_model.layers.23                   alloc  31.498G reserved  32.086G peak  31.787G
+qserve: loading target model ... 15 s
+[mgi] free 8.77 total 76.79 alloc 32.81 reserved 33.38
+[loaddiag]  27 model.language_model.layers.24                   alloc  32.806G reserved  33.377G peak  33.095G
+[mgi] free 6.38 total 76.79 alloc 33.99 reserved 34.57
+[loaddiag]  28 model.language_model.layers.25                   alloc  33.989G reserved  34.574G peak  34.278G
+[mgi] free 3.62 total 76.79 alloc 35.30 reserved 35.89
+[loaddiag]  29 model.language_model.layers.26                   alloc  35.298G reserved  35.895G peak  35.587G
+[mgi] free 1.04 total 76.79 alloc 36.62 reserved 37.19
+[loaddiag]  30 model.language_model.layers.27                   alloc  36.622G reserved  37.186G peak  36.911G
+[mgi] free 0.00 total 76.79 alloc 37.93 reserved 38.51
+C:\Projects\kyojin\exllamav3\model\model_ls.py:328: FutureWarning: `torch.distributed.reduce_op` is deprecated, please use `torch.distributed.ReduceOp` instead
+  if isinstance(o, torch.Tensor) and o.is_cuda:
+[loaddiag] OOM at model.language_model.layers.28: live CUDA storages 37.787 GiB, allocated 37.931
+[loaddiag]      22912.0 MiB  n=  179  torch.int16 (160, 40, 64)
+[loaddiag]      11520.0 MiB  n=   90  torch.int16 (40, 160, 64)
+[loaddiag]       1152.0 MiB  n=    9  torch.float16 (10240, 320)
+[loaddiag]        412.5 MiB  n=   22  torch.int16 (160, 640, 96)
+[loaddiag]        367.0 MiB  n=   58  torch.float16 (324, 10240)
+[loaddiag]        256.0 MiB  n=    2  torch.float16 (640,)
+[loaddiag]        256.0 MiB  n=    2  torch.int16 (40, 160, 96)
+[loaddiag]        183.5 MiB  n=   58  torch.int8 (324, 10240)
+[loaddiag]        181.2 MiB  n=   58  torch.int8 (4, 640, 320, 4)
+[loaddiag]        157.5 MiB  n=    7  torch.int16 (160, 768, 96)
+[loaddiag]        145.0 MiB  n=   58  torch.float16 (512, 2560)
+[loaddiag]        129.1 MiB  n=   59  torch.float16 (10240,)
+[loaddiag]        128.0 MiB  n=    1  torch.float16 (2560,)
+[loaddiag]        128.0 MiB  n=    1  torch.uint8 (134217728,)
+[loaddiag]        128.0 MiB  n=    1  torch.bfloat16 (10240, 1, 4)
+[loaddiag]        112.0 MiB  n=   14  torch.float16 (32, 256, 2, 256)
+[loaddiag]         80.0 MiB  n=    1  torch.float32 (1, 2048, 4, 2560)
+[loaddiag]         72.5 MiB  n=   29  torch.float16 (2560, 512)
+[loaddiag]         66.0 MiB  n=   22  torch.float32 (1, 1, 48, 128, 128)
+[loaddiag]         64.0 MiB  n=    1  torch.float16 (33554432,)
+[loaddiag]         50.0 MiB  n=    1  torch.float16 (2560, 10240)
+[loaddiag]         36.1 MiB  n=   29  torch.uint8 (1304064,)
+[loaddiag]         32.0 MiB  n=    1  torch.float32 (8388608,)
+[loaddiag]         24.8 MiB  n=   66  torch.float32 (1, 2048, 48)
+[loaddiag]         20.0 MiB  n=    1  torch.float32 (1, 2048, 2560)
+qserve: loading target model done in 20 s
+Traceback (most recent call last):
+  File "C:\Users\plpro\AppData\Local\Temp\claude\83b265546ff847cc\8ce81e3a-b21c-421a-8bec-7b4867dbab88\scratchpad\wrap.py", line 11, in <module>
+    runpy.run_path("tools/qwen/serve.py", run_name="__main__")
+  File "<frozen runpy>", line 287, in run_path
+  File "<frozen runpy>", line 98, in _run_module_code
+  File "<frozen runpy>", line 88, in _run_code
+  File "tools/qwen/serve.py", line 2716, in <module>
+    main()
+  File "tools/qwen/serve.py", line 2690, in main
+    engine, template, defaults, model_dir, t0 = load_all(args)
+                                                ^^^^^^^^^^^^^^
+  File "tools/qwen/serve.py", line 2553, in load_all
+    engine = QwenEngine(model_dir, args.ctx, ndt=args.ndt, draft_policy=args.draft_policy, vision=not args.no_vision,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "tools/qwen/serve.py", line 888, in __init__
+    self.model.load(max_chunk_size=max_chunk_size, progressbar=False, callback=startup_health.load_callback())
+  File "C:\Projects\kyojin\.venv-win\Lib\site-packages\torch\utils\_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Projects\kyojin\exllamav3\model\model.py", line 668, in load
+    for _ in f: pass
+             ^
+  File "C:\Projects\kyojin\exllamav3\model\model.py", line 574, in load_gen
+    yield from self._load_autosplit(
+  File "C:\Projects\kyojin\exllamav3\model\model_ls.py", line 351, in _load_autosplit
+    raise RuntimeError("Insufficient VRAM in split for model and cache")
+RuntimeError: Insufficient VRAM in split for model and cache
+done

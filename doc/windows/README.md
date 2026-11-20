@@ -29,6 +29,7 @@ Tasks inside a sprint are in **priority order: hardest and most uncertain first*
 | Independent review (Opus 5.5), findings and verification | [review/opus-r1.md](review/opus-r1.md), evidence [review/opus-r1-notes.md](review/opus-r1-notes.md) |
 | Things we are deliberately not doing, error catalogue process | [deferred.md](deferred.md) |
 | Session journal (append-only) | [journal.md](journal.md) |
+| Dynamic GPU memory limits (61 GiB wall), evidence, versions and rollback, unfiled bug reports | [dynamic-gpu-memory-limitations.md](dynamic-gpu-memory-limitations.md), [shared-vram-research.md](shared-vram-research.md), [versions-and-rollback.md](versions-and-rollback.md), [bug-reports/](bug-reports/README.md) |
 | Sprint folders (goal, exit criteria, task files) | [sprints/](sprints/) |
 | Orchestrator script | [scripts/windows/kyojin_win.py](../../scripts/windows/kyojin_win.py) |
 | Task tracker | [scripts/windows/tasks.py](../../scripts/windows/tasks.py) |

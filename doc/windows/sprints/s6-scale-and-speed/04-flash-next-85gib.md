@@ -113,3 +113,5 @@ Evidence log table (quant, n-gram mode, dedicated setting, GPU/host memory, load
 **Links.** [S1-04 ceiling](../s1-risk-spikes/04-gpu-memory-ceiling.md) · [S6-05 host memory](05-windows-host-memory.md) · [S6-09 (35B-A3B and the MoE dispatch)](09-qwen3-30b-a3b-moe-decode.md) · [deferred.md](../../deferred.md) · [env_vars.md](../../../env_vars.md) (`EXL3_NGRAM_*`)
 
 Depends on: [S1-04](../s1-risk-spikes/04-gpu-memory-ceiling.md)
+
+- 2026-11-20, Phase 4 answered for dynamic mode: lowering the dedicated GPU memory to dynamic/shared does **not** keep the usable ceiling high; usable GPU memory becomes about 61 GiB (device + pinned), so Flash-Next 4.05bpw (about 64 GiB on the GPU) does not load. Go/no-go: no-go in dynamic mode, go with a fixed carve-out (96 GB measured; 72 to 80 GB untested). See [dynamic-gpu-memory-limitations.md](../../dynamic-gpu-memory-limitations.md).

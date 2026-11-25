@@ -57,6 +57,20 @@ def _pad_to(t: torch.Tensor, pad_to) -> torch.Tensor:
     return p.contiguous()
 
 
+if os.name == "nt":
+    import threading
+    _pread_lock = threading.Lock()
+
+    def _os_pread(fd: int, n: int, pos: int) -> bytes:
+        # Windows has no os.pread: seek + read under a lock (these reads are the rare, whole-tensor ones; the
+        # n-gram row paths that need queue depth have their own overlapped-I/O handles)
+        with _pread_lock:
+            os.lseek(fd, pos, os.SEEK_SET)
+            return os.read(fd, n)
+else:
+    _os_pread = os.pread
+
+
 class GGUFCollection:
 
     def __init__(self, path: str):
@@ -73,7 +87,7 @@ class GGUFCollection:
                 self.meta.setdefault(k, v)
             for name, (ty, dims, off) in infos.items():
                 self.infos[name] = (ty, dims, off | (i << 48))
-            self.fds.append(os.open(p, os.O_RDONLY))
+            self.fds.append(os.open(p, os.O_RDONLY | getattr(os, "O_BINARY", 0)))   # Windows: no O_BINARY = text mode (CRLF, ^Z)
             self.bases.append(base)
         self.fd, self.base = self.fds[0], self.bases[0]
         # SafetensorsCollection attrs poked by Config/model_init paths
@@ -218,7 +232,7 @@ class GGUFCollection:
         mv = memoryview(buf)
         got = 0
         while got < n:
-            r = os.pread(fd, n - got, base + off + got)
+            r = _os_pread(fd, min(n - got, 1 << 30), base + off + got)
             if not r:
                 raise IOError(f"short read at {off + got}")
             mv[got:got + len(r)] = r

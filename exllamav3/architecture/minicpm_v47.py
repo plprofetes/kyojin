@@ -214,6 +214,15 @@ def _fp_override(config, eng_weight_key: str, gguf_name: str):
             config.gguf.new_tensors = {}
         config.gguf.new_tensors[eng_weight_key] = torch.from_numpy(np.ascontiguousarray(w))
         return
+    if ty == 8:  # Q8_0 (unsloth Qwen3.5 UD packs store ssm_alpha / ssm_beta this way): 34-byte blocks of 32 weights
+        from ..foreign_quant.q8_0 import dequant_q8_0
+        K, N = dims[0], dims[1]
+        raw = config.gguf._pread(off, N * (K // 32) * 34).reshape(N * (K // 32), 34)
+        w = dequant_q8_0(raw).reshape(N, K).T
+        if config.gguf.new_tensors is None:
+            config.gguf.new_tensors = {}
+        config.gguf.new_tensors[eng_weight_key] = torch.from_numpy(np.ascontiguousarray(w))
+        return
     bbs = {12: 144, 13: 176, 14: 210, 23: 136}
     fmts = {12: "q4_k", 13: "q5_k", 14: "q6_k", 23: "iq4_xs"}
     assert ty in bbs, f"{gguf_name}: type {ty}"
